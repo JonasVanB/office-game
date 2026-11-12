@@ -11,6 +11,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#c9dcec;font-family:sy
 #zone{top:10px;left:10px;font-weight:600}
 #goto{position:fixed;top:44px;left:10px;font-size:13px;padding:5px 6px;border-radius:8px;border:0;background:rgba(20,24,30,.62);color:#fff;max-width:46vw}
 #mini{position:fixed;top:10px;right:10px;border-radius:8px;background:rgba(20,24,30,.55)}
+#seatBtn{position:fixed;bottom:12px;right:10px;z-index:2;width:34px;height:30px;border:0;border-radius:8px;background:#2f5d9e;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+#seatBtn.off{background:rgba(20,24,30,.62)}
 #hint{bottom:12px;left:50%;transform:translateX(-50%);white-space:nowrap}
 #joy{position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.45);display:none;pointer-events:none}
 #knob{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(255,255,255,.75)}
@@ -49,6 +51,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#c9dcec;font-family:sy
 <option value="42.85,7.0,90,1">Graslei &amp; Korenlei (upstairs)</option>
 </select>
 <canvas id="mini"></canvas>
+<button id="seatBtn" title="Show or hide seat numbers (N)">#</button>
 <div id="hint" class="pill"></div>
 <div id="doorHint" class="pill" style="display:none;bottom:22%;left:50%;transform:translateX(-50%);font-size:15px;padding:8px 14px;pointer-events:auto;cursor:pointer"></div>
 <div id="joy"><div id="knob"></div></div>
@@ -69,8 +72,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#c9dcec;font-family:sy
 window.__isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
 document.getElementById('howto').textContent = window.__isTouch
   ? 'Drag on the left side to walk (a joystick appears). Drag on the right side to look around.'
-  : 'Move the mouse to look around (no clicking needed). WASD or arrow keys to walk, Shift to run, E to open or close the door in front of you. Press Esc to pause and get your mouse back.';
-document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · E: doors · Esc: pause';
+  : 'Move the mouse to look around (no clicking needed). WASD or arrow keys to walk, Shift to run, E to open or close the door in front of you, N to show or hide the seat numbers. Press Esc to pause and get your mouse back.';
+document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · E: doors · N: seats · Esc: pause';
 window.__showErr = function(m){ var e = document.getElementById('msg'); e.textContent = m; e.style.display = 'block'; };
 function __start(ev){ if (ev) ev.preventDefault(); document.getElementById('start').style.display = 'none'; window.__started = true; if (window.__onStart) window.__onStart(); else if (!window.__ready) window.__showErr('Loading 3D… one moment.'); }
 document.getElementById('go').addEventListener('click', __start);
@@ -438,14 +441,15 @@ sign('Stairs', 34.43, 2.35, 5.39, FZ, 0.7); sign('Lift', 29.85, 2.35, 5.38, FZ, 
 endWall(0, -1); endWall(BL, 1);
 
 // ---------- furniture ----------
+const SEATS = [], MONITORS = [];   // every seat (chair or stool) and screen, recorded for seat numbering
 function chair(x, z, ang, m){
-  const g = new THREE.Group(); m = m || DARK;
+  SEATS.push({x, z, by: BY}); const g = new THREE.Group(); m = m || DARK;
   part(g, 0.46, 0.07, 0.46, 0, 0.46, 0, m); part(g, 0.44, 0.45, 0.06, 0, 0.74, 0.2, m);
   part(g, 0.05, 0.42, 0.05, 0, 0.21, 0, LEG);
   g.position.set(x, BY, z); g.rotation.y = ang; scene.add(g);
 }
-function stool(x, z, h){ const g = new THREE.Group(); part(g, 0.36, 0.05, 0.36, 0, h, 0, DARK); part(g, 0.05, h, 0.05, 0, h/2, 0, LEG); part(g, 0.36, 0.03, 0.36, 0, 0.015, 0, LEG); g.position.set(x, BY, z); scene.add(g); }
-function monitor(x, z, ang){ const g = new THREE.Group(); part(g, 0.55, 0.33, 0.03, 0, 1.03, 0, SCREEN); part(g, 0.05, 0.12, 0.05, 0, 0.81, 0.04, LEG); g.position.set(x, BY, z); g.rotation.y = ang; scene.add(g); }
+function stool(x, z, h){ SEATS.push({x, z, by: BY}); const g = new THREE.Group(); part(g, 0.36, 0.05, 0.36, 0, h, 0, DARK); part(g, 0.05, h, 0.05, 0, h/2, 0, LEG); part(g, 0.36, 0.03, 0.36, 0, 0.015, 0, LEG); g.position.set(x, BY, z); scene.add(g); }
+function monitor(x, z, ang){ MONITORS.push({x, z, by: BY}); const g = new THREE.Group(); part(g, 0.55, 0.33, 0.03, 0, 1.03, 0, SCREEN); part(g, 0.05, 0.12, 0.05, 0, 0.81, 0.04, LEG); g.position.set(x, BY, z); g.rotation.y = ang; scene.add(g); }
 function table(x0, x1, z0, z1, h, m){ h = h || 0.74; box(x0, x1, h-0.03, h, z0, z1, m || WHITE, true); for (const [x, z] of [[x0+0.06, z0+0.06], [x1-0.06, z0+0.06], [x0+0.06, z1-0.06], [x1-0.06, z1-0.06]]) box(x-0.025, x+0.025, 0, h-0.03, z-0.025, z+0.025, LEG); }
 const CH = 0.28;   // chair centre distance from a table edge (seats sit close to the tables)
 function meetingTable(x0, x1, z0, z1){
@@ -1078,7 +1082,7 @@ doorHint.addEventListener('click', e => { e.preventDefault(); toggleDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); toggleDoor(); });
 function look(dx, dy, s){ yaw -= dx*s; pitch -= dy*s; pitch = Math.max(-1.45, Math.min(1.45, pitch)); }
 const keys = {};
-addEventListener('keydown', e => { if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ toggleDoor(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
+addEventListener('keydown', e => { if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ toggleDoor(); return; } if (e.code === 'KeyN' && !e.repeat){ toggleSeats(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; pause(); });
 // Mouse look without clicking: the "Start walking" click captures the mouse (pointer lock).
@@ -1133,6 +1137,35 @@ function zoneName(x, z){
   for (const r of rooms) if (x >= r[1] && x <= r[2] && z >= r[3] && z <= r[4]) return r[0];
   if (x < 14) return 'Landscape'; if (x < 28) return 'Meeting corridor'; if (x < 35) return 'Entrance hall'; return 'Stille ruimte';
 }
+
+// ---------- seat numbers ----------
+// Every chair and stool gets a number, grouped by floor and room (side A before side B, then along x), so people (and later NPCs) can be linked to a seat.
+// A seat is a "desk" seat when a screen stands within 0.9 m. Toggle the labels with N (or the # button).
+const SEAT_LEVELS = [[0, 0, '4e'], [MZ, 1, 'Mezzanine'], [LO, 2, '3e']];
+(function numberSeats(){
+  const keep = mode;
+  for (const s of SEATS){ const L = SEAT_LEVELS.find(l => l[0] === s.by) || SEAT_LEVELS[0]; s.level = L[2]; s.lv = L[1];
+    mode = L[1]; s.room = zoneName(s.x, s.z); s.desk = MONITORS.some(m => m.by === s.by && Math.hypot(m.x - s.x, m.z - s.z) < 0.9); }
+  mode = keep;
+  const roomX = {}; for (const s of SEATS){ const k = s.lv + '|' + s.room; roomX[k] = Math.min(roomX[k] ?? 99, s.x); }
+  SEATS.sort((a, b) => a.lv - b.lv || roomX[a.lv + '|' + a.room] - roomX[b.lv + '|' + b.room] || a.room.localeCompare(b.room) || (a.z > 6.5) - (b.z > 6.5) || Math.round(a.x*10) - Math.round(b.x*10) || a.z - b.z);
+  SEATS.forEach((s, i) => s.n = i + 1);
+})();
+const seatLabels = new THREE.Group(); scene.add(seatLabels);
+for (const s of SEATS){
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = s.desk ? '#2f5d9e' : '#e0663a'; g.beginPath(); g.arc(64, 64, 58, 0, Math.PI*2); g.fill();
+  g.lineWidth = 6; g.strokeStyle = '#fff'; g.stroke();
+  g.fillStyle = '#fff'; g.font = `700 ${s.n > 99 ? 50 : 62}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(s.n), 64, 68);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: t}));
+  sp.scale.set(0.32, 0.32, 1); sp.position.set(s.x, s.by + 1.15, s.z); seatLabels.add(sp);
+}
+window.SEATS = SEATS;   // for listing the seats from the console
+function toggleSeats(){ seatLabels.visible = !seatLabels.visible; seatBtn.classList.toggle('off', !seatLabels.visible); }
+const seatBtn = document.getElementById('seatBtn');
+seatBtn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); toggleSeats(); seatBtn.blur(); });
+seatBtn.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); toggleSeats(); });
 const zoneEl = document.getElementById('zone'); let lastZone = '';
 
 function resize(){ const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w/h; camera.fov = w < h ? 80 : 70; camera.updateProjectionMatrix(); buildMap(); }
