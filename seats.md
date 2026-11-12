@@ -1,7 +1,7 @@
 # Seat numbers
 
-Every chair and stool in the 3D office has a number. In the game, press **N** (or tap the **#** button bottom right) to show or hide them.
-Blue labels are **desk seats** (with a screen); orange labels are meeting, kitchen and lounge seats.
+Every chair and stool in the office has a number on [floorplan.svg](floorplan.svg) (4e, mezzanine and 3e verdiep).
+Blue = **desk seat** (with a screen); orange = meeting, kitchen and lounge seat; amber = mezzanine (Graslei, Korenlei).
 
 Fill in the **Who** column to link a colleague (persona) to their usual seat.
 
@@ -51,7 +51,8 @@ Fill in the **Who** column to link a colleague (persona) to their usual seat.
 | 83–86 | 4e | Boekentoren |
 | 87–89 | 4e | Kitchen bar stools |
 | 90–93 | 4e | Stille ruimte · couch & booth area |
-| 100–117 | 4e | Stille ruimte · kitchen-side tables |
+| 100–101, 104–105, 108–109 | 4e | Stille ruimte · table under the stairs (not drawn on the SVG) |
+| 102–103, 106–107, 110–117 | 4e | Stille ruimte · long kitchen table |
 | 118–123 | Mezzanine | Graslei (upstairs) |
 | 124–129 | Mezzanine | Korenlei (upstairs) |
 | 130–135 | 3e | Belfort |
