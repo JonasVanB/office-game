@@ -183,6 +183,7 @@ function onPresence(type, key, v){
     remotes.set(key, r);
   }
   r.tx = v.x; r.ty = v.y || 0; r.tz = v.z; r.tr = v.r || 0; r.l = v.l || 0; r.name = name; r.color = av.shirt; r.seen = performance.now();
+  r.av = av; r.kb = v.kb || null; r.kh = v.kh ? 1 : 0; r.ks = v.ks || 0; r.kg = v.kg || null;   // kiss.js: beanbag seat, holding, start time, game state
   r.key = key; r.si = +v.si || 0; r.pe = v.pe || null; r.bx = v.bx || null;   // sitting (seat height), the toilet game (toilet.js), boxing (boxing.js)
   // a new chat message (c = text, ct = when): bubble above their head and a line in the chat log
   if (v.c && v.ct && v.ct !== r.ct){ r.ct = v.ct; if (net.now() - v.ct < 15000) showChat(r, name, String(v.c).slice(0, MAXCHAT)); }
@@ -297,7 +298,7 @@ function tick(dt){
     r.walk = (r.walk || 0) + ((sp > 0.3 ? 1 : 0) - (r.walk || 0))*Math.min(1, dt*8);
     r.obj.position.set(r.x, r.y, r.z); r.obj.rotation.y = r.r;
     // someone standing right where you stand (e.g. both just spawned) would fill your whole view: hide them until you step apart
-    r.obj.visible = !(Math.hypot(r.x - G.state.x, r.z - G.state.z) < 0.7 && Math.abs(r.y - G.state.y) < 1);
+    r.obj.visible = !r.kb && !(Math.hypot(r.x - G.state.x, r.z - G.state.z) < 0.7 && Math.abs(r.y - G.state.y) < 1);   // on a beanbag kiss.js draws them seated
     animateAvatar(r.obj, moved*5.5, r.walk);
     if (r.si){ const L = r.obj.userData.limbs; L.legL.rotation.x = L.legR.rotation.x = Math.PI/2*0.92; L.armL.rotation.x = L.armR.rotation.x = 0.55;   // sitting: legs forward, hands on the lap
       r.obj.position.y = r.y + r.si + 0.06 - 0.9; }
@@ -369,6 +370,11 @@ async function main(){
   net.onDoors(applyDoor);
   window.__onDoor = (i, open) => { if (i >= 0) net.setDoor(i, open); };
   // the Orbid sweater (progress.js unlocks it): toggle it on your saved character; others see it through your presence data
+  // kiss.js (Stiekem kussen) works with the other players' presence
+  window.__mpRemotes = () => [...remotes.entries()].map(([key, r]) => ({key, name: r.name, av: r.av, kb: r.kb, kh: r.kh, ks: r.ks, kg: r.kg, seen: r.seen}));
+  window.__mpSend = d => { if (joined) net.send(d); };
+  window.__myAvatar = () => profile ? profile.avatar : null;
+  window.__myKey = () => net.myKey;
   window.__wearingSweater = () => !!(profile && profile.avatar && profile.avatar.sweater);
   window.__setSweater = on => {
     if (!profile || !user || !(window.__hasSweater && window.__hasSweater())) return false;

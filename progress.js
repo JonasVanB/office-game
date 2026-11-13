@@ -91,7 +91,7 @@ export const ACHIEVEMENTS = [
     ['wc_duelwin', '🏆', 'Duel champion', 'Win a urinal duel', 30],
   ]),
   ...A('Stiekem kussen', [
-    ['k_first', '💋', 'First kiss', 'Let the couple kiss in the Boekentoren', 10],
+    ['k_first', '💋', 'First kiss', 'Kiss a colleague on the Boekentoren beanbags (2 players)', 10],
     ['k_caught', '😳', 'Caught red-lipped', 'Get caught kissing', 5],
     ['k_clean', '🤫', 'Not a soul saw it', 'Clear a level without getting caught', 25],
     ['k_l3', '🚪', 'Getting bold', 'Reach level 3 (the boss peeks in)', 20],
