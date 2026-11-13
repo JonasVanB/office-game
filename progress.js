@@ -87,6 +87,8 @@ export const ACHIEVEMENTS = [
     ['wc_sniper', '🎯', 'Sniper', 'Get the Sniper rating', 40],
     ['wc_mop', '🧽', 'Get the mop', 'Leave a big puddle', 10],
     ['wc_10', '💧', 'Well hydrated', 'Go 10 times', 20, {stat: 'toilet', n: 10}],
+    ['wc_duel', '🤺', 'Urinal duel', 'Play a urinal duel against a colleague', 15],
+    ['wc_duelwin', '🏆', 'Duel champion', 'Win a urinal duel', 30],
   ]),
   ...A('Night', [
     ['n_boo', '👻', 'Boo!', 'Get scared by a ghost', 20],

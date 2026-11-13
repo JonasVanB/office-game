@@ -100,11 +100,18 @@ async function firebaseNet(){
       D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('tiles not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
     onPostits(cb){ const p = D.ref(db, 'postits');
       D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('post-its not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
+    // boards/<board>/<stroke> = {c: colour, w: width, p: "u,v u,v …"}: what everyone drew on each whiteboard (boards.js)
+    addStroke(b, d){ D.push(D.ref(db, 'boards/' + b), d).catch(e => console.warn('stroke not shared:', e.message)); },
+    clearBoard(b){ D.remove(D.ref(db, 'boards/' + b)).catch(e => console.warn('board not cleared:', e.message)); },
+    onBoard(b, add, removed){ const p = D.ref(db, 'boards/' + b);
+      D.onChildAdded(p, s => add(s.key, s.val()), e => console.warn('board not loaded:', e.message)); D.onChildRemoved(p, s => removed(s.key)); },
   };
 }
 
 function localNet(){
-  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, postitCb = () => {}, mine = null;
+  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, postitCb = () => {}, mine = null; const boardCbs = {};
+  const localBoards = () => { try { return JSON.parse(localStorage.getItem('office.localBoards')) || {}; } catch (e){ return {}; } };
+  const saveBoards = all => { try { localStorage.setItem('office.localBoards', JSON.stringify(all)); } catch (e){} };
   const localPostits = () => { try { return JSON.parse(localStorage.getItem('office.localPostits')) || {}; } catch (e){ return {}; } };
   const savePostits = all => { try { localStorage.setItem('office.localPostits', JSON.stringify(all)); } catch (e){} };
   let tileCb = () => {};
@@ -113,6 +120,8 @@ function localNet(){
   bc.onmessage = e => { const {type, key, data} = e.data || {}; if (!key || key === myKey) return;
     if (type === 'door') return doorCb(e.data.i, e.data.o);
     if (type === 'postit') return postitCb(e.data.id, e.data.d);
+    if (type === 'stroke'){ const f = boardCbs[e.data.b]; if (f) f.add(e.data.id, e.data.d); return; }
+    if (type === 'clear'){ const f = boardCbs[e.data.b]; if (f) for (const id of e.data.ids) f.removed(id); return; }
     if (type === 'tile') return tileCb(e.data.id, e.data.d);
     if (type === 'hello'){ if (mine) bc.postMessage({type: 'state', key: myKey, data: mine}); return; }
     if (type === 'bye') return cb('remove', key);
@@ -135,6 +144,10 @@ function localNet(){
     async loadProgress(id){ try { return JSON.parse(localStorage.getItem('office.localProgress.' + id)); } catch (e){ return null; } },
     saveProgress(id, d){ try { localStorage.setItem('office.localProgress.' + id, JSON.stringify(d)); } catch (e){} },
     onProgress(f){ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('office.localProgress.')) try { f(k.slice(21), JSON.parse(localStorage.getItem(k))); } catch (e){} } },
+    // whiteboards: kept in this browser's localStorage, shared with the other tabs
+    addStroke(b, d){ const all = localBoards(), id = 's' + Date.now().toString(36) + rid(); (all[b] = all[b] || {})[id] = d; saveBoards(all); bc.postMessage({type: 'stroke', key: myKey, b, id, d}); const f = boardCbs[b]; if (f) f.add(id, d); },
+    clearBoard(b){ const all = localBoards(), ids = Object.keys(all[b] || {}); delete all[b]; saveBoards(all); bc.postMessage({type: 'clear', key: myKey, b, ids}); const f = boardCbs[b]; if (f) for (const id of ids) f.removed(id); },
+    onBoard(b, add, removed){ boardCbs[b] = {add, removed}; const all = localBoards()[b] || {}; for (const id in all) add(id, all[id]); },
     setTile(id, d){ const all = localTiles(); all[id] = d; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d}); },
     removeTile(id){ const all = localTiles(); delete all[id]; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d: null}); },
     onTiles(f){ tileCb = f; const all = localTiles(); for (const id in all) f(id, all[id]); },
@@ -170,6 +183,7 @@ function onPresence(type, key, v){
     remotes.set(key, r);
   }
   r.tx = v.x; r.ty = v.y || 0; r.tz = v.z; r.tr = v.r || 0; r.l = v.l || 0; r.name = name; r.color = av.shirt; r.seen = performance.now();
+  r.key = key; r.si = +v.si || 0; r.pe = v.pe || null;   // sitting (seat height) and the toilet game (toilet.js)
   // a new chat message (c = text, ct = when): bubble above their head and a line in the chat log
   if (v.c && v.ct && v.ct !== r.ct){ r.ct = v.ct; if (net.now() - v.ct < 15000) showChat(r, name, String(v.c).slice(0, MAXCHAT)); }
   refreshOnline();
@@ -284,6 +298,8 @@ function tick(dt){
     // someone standing right where you stand (e.g. both just spawned) would fill your whole view: hide them until you step apart
     r.obj.visible = !(Math.hypot(r.x - G.state.x, r.z - G.state.z) < 0.7 && Math.abs(r.y - G.state.y) < 1);
     animateAvatar(r.obj, moved*5.5, r.walk);
+    if (r.si){ const L = r.obj.userData.limbs; L.legL.rotation.x = L.legR.rotation.x = Math.PI/2*0.92; L.armL.rotation.x = L.armR.rotation.x = 0.55;   // sitting: legs forward, hands on the lap
+      r.obj.position.y = r.y + r.si + 0.06 - 0.9; }
     if (r.bubble && now > r.bubbleUntil){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); r.bubble = null; }
   }
   if (postits) postits.update();
@@ -292,9 +308,9 @@ function tick(dt){
   for (const i of pendingClose){ const d = G.doors[i]; if (!d || !insideDoor(d)){ if (d) d.target = 0; pendingClose.delete(i); } }
   if (!joined) return;
   const s = G.state, round = n => Math.round(n*100)/100;
-  const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv};
-  const changed = !sent || Math.abs(cur.x - sent.x) > 0.02 || Math.abs(cur.z - sent.z) > 0.02 || Math.abs(cur.y - sent.y) > 0.02 || Math.abs(cur.r - sent.r) > 0.03 || cur.l !== sent.l;
-  if ((changed && now - lastSent > 110) || now - lastBeat > 15000){ net.send(cur); sent = cur; lastSent = lastBeat = now; }
+  const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv, si: s.si || 0, pe: s.pe || null}, extra = JSON.stringify([cur.si, cur.pe]);
+  const changed = !sent || Math.abs(cur.x - sent.x) > 0.02 || Math.abs(cur.z - sent.z) > 0.02 || Math.abs(cur.y - sent.y) > 0.02 || Math.abs(cur.r - sent.r) > 0.03 || cur.l !== sent.l || extra !== sent.extra;
+  if ((changed && now - lastSent > 110) || now - lastBeat > 15000){ net.send(cur); sent = Object.assign({extra}, cur); lastSent = lastBeat = now; }
 }
 
 function drawMapExtra(ctx, PAD, MS, level){
@@ -358,6 +374,11 @@ async function main(){
   tickets = initTickets({G, prog, me});
   window.__onlineCount = () => joined ? remotes.size + 1 : 0;
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
+  // for toilet.js (duels, other people's streams), sitting (who sits where) and boards.js (shared drawings)
+  G.mp = {myKey: net.myKey, players: () => [...remotes.values()].map(r => ({key: r.key, name: r.name, x: r.x, y: r.ty, z: r.z, l: r.l || 0, si: r.si, pe: r.pe}))};
+  window.__seatTaken = c => { for (const r of remotes.values()) if (r.si && (r.l || 0) === (c.mode === 2 ? 2 : 0) && Math.hypot(r.tx - c.x, r.tz - c.z) < 0.3) return true; return false; };
+  window.__boardNet = {add: (b, d) => net.addStroke(b, d), clear: b => net.clearBoard(b), listen: (b, add, removed) => net.onBoard(b, add, removed)};
+  window.dispatchEvent(new Event('board-net'));
 
   ui.login.querySelector('span').textContent = LOCAL ? 'Sign in (local test)' : 'Sign in with Microsoft';
   ui.login.onclick = async () => {

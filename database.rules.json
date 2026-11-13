@@ -28,6 +28,15 @@
         ".validate": "newData.hasChildren(['xp', 'n']) && newData.child('xp').isNumber() && newData.child('xp').val() >= 0 && newData.child('xp').val() <= 100000 && newData.child('n').isString() && newData.child('n').val().length <= 20"
       }
     },
+    "boards": {
+      ".read": true,
+      "$b": {
+        ".write": "$b.length <= 3",
+        "$s": {
+          ".validate": "newData.hasChildren(['c', 'w', 'p']) && newData.child('c').isNumber() && newData.child('w').isNumber() && newData.child('p').isString() && newData.child('p').val().length <= 4000"
+        }
+      }
+    },
     "tiles": {
       ".read": true,
       "$k": {
