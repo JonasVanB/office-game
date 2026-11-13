@@ -82,7 +82,7 @@ window.__isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches
 document.getElementById('howto').textContent = window.__isTouch
   ? 'Drag on the left side to walk (a joystick appears). Drag on the right side to look around.'
   : 'Move the mouse to look around (no clicking needed). WASD or arrow keys to walk, Shift to run, E to open or close the door in front of you. Press Esc to pause and get your mouse back.';
-document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · E: doors · Esc: pause';
+document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · E: doors · M: sound · Esc: pause';
 window.__showErr = function(m){ var e = document.getElementById('msg'); e.textContent = m; e.style.display = 'block'; };
 function __start(ev){ if (ev) ev.preventDefault(); document.getElementById('start').style.display = 'none'; window.__started = true; window.dispatchEvent(new Event('office-start')); if (window.__onStart) window.__onStart(); else if (!window.__ready) window.__showErr('Loading 3D… one moment.'); }
 document.getElementById('go').addEventListener('click', __start);
@@ -114,8 +114,8 @@ scene.background = new THREE.Color(0xc9dcec);
 scene.fog = new THREE.Fog(0xc9dcec, 70, 190);
 const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 300);
 camera.rotation.order = 'YXZ';
-scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.72));
-scene.add(new THREE.AmbientLight(0xffffff, 0.32));
+const hemi = new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.72); scene.add(hemi);
+const amb = new THREE.AmbientLight(0xffffff, 0.32); scene.add(amb);
 const sun = new THREE.DirectionalLight(0xfff3df, 0.5); sun.position.set(12, 30, -18); scene.add(sun);
 // bridge for mp.js (multiplayer): the scene plus the player's own state, updated every frame
 const GAME = window.GAME = {THREE, scene, camera, renderer, state: {x: 0, y: 0, z: 0, yaw: 0, lv: 0, started: false}};
@@ -152,6 +152,7 @@ const GLASS = new THREE.MeshStandardMaterial({color: 0xbfd9e6, transparent: true
 const WINGLASS = new THREE.MeshStandardMaterial({color: 0xd6ecff, transparent: true, opacity: 0.16, roughness: 0.05, depthWrite: false});
 const WHITE = mat(0xf3f2ee, {roughness: 0.6}), LEG = mat(0x8e9196, {roughness: 0.5, metalness: 0.4});
 const DARK = mat(0x2d3036, {roughness: 0.7}), FELT = mat(0x6f7f73), SCREEN = mat(0x16181c, {roughness: 0.4});
+const TVSCREEN = new THREE.MeshBasicMaterial({color: 0x16181c});   // big TVs: clock.js shows the week schedule on them
 const ANTH = mat(0x3c3f44), LEAF1 = mat(0x4f8a3c), LEAF2 = mat(0x3d7330), WOOD = mat(0xb48a5a, {roughness: 0.7});
 const FABRIC = mat(0x3e5c63), FABRIC2 = mat(0x2f4a50), METAL = mat(0xb9bdc2, {roughness: 0.35, metalness: 0.7});
 const CERAMIC = mat(0xfafafa, {roughness: 0.3}), LIGHT = basic(0xfffcf2);
@@ -555,14 +556,14 @@ for (let i=0;i<5;i++){ const z = 0.5 + i*0.8 + 0.4; box(21.45, 21.46, 0, 1.95, z
 box(21.44, 21.92, 1.95, 1.98, 0.48, 4.92, CABLINE);                                                              // top
 // Rabot and Prinsenhof: longer tables (2.6 m, 6 seats) and a large TV on a stand in front of the window
 function bigTV(cx){
-  box(cx-0.95, cx+0.95, 0.9, 2.0, 0.42, 0.47, SCREEN); box(cx-0.97, cx+0.97, 0.88, 2.02, 0.47, 0.49, DARK);   // ~85" screen facing the room
+  box(cx-0.95, cx+0.95, 0.9, 2.0, 0.42, 0.47, TVSCREEN); box(cx-0.97, cx+0.97, 0.88, 2.02, 0.47, 0.49, DARK);   // ~85" screen facing the room
   for (const dx of [-0.6, 0.6]){ box(cx+dx-0.03, cx+dx+0.03, 0, 0.9, 0.47, 0.53, LEG); box(cx+dx-0.05, cx+dx+0.05, 0, 0.03, 0.25, 0.75, LEG); }
   colliders.push([cx-0.97, cx+0.97, 0.25, 0.75, 0]);
 }
 meetingTable(23.0, 24.0, 1.3, 3.9); bigTV(23.495);     // Rabot
 meetingTable(26.0, 27.0, 1.3, 3.9); bigTV(26.515);     // Prinsenhof
 meetingTable(18.5, 23.9, 9.25, 11.45);  // Portus Ganda: table 5.4 × 2.2 m
-box(17.09, 17.14, 1.0, 1.95, 8.6, 10.3, SCREEN); box(17.09, 17.14, 1.0, 1.95, 10.4, 12.1, SCREEN);   // two TVs side by side on the Print / Admin end wall
+box(17.09, 17.14, 1.0, 1.95, 8.6, 10.3, TVSCREEN); box(17.09, 17.14, 1.0, 1.95, 10.4, 12.1, TVSCREEN);   // two TVs side by side on the Print / Admin end wall
 // Print: gray printer against the Portus Ganda wall, orange bench along the long wall shared with Admin storage
 box(16.3, 16.98, 0, 1.0, 8.3, 9.3, mat(0x7d8288, {roughness: 0.5}), true); box(16.3, 16.98, 1.0, 1.08, 8.3, 9.3, mat(0x55595e));
 box(16.27, 16.3, 0.25, 0.45, 8.4, 9.2, mat(0x5f6368)); box(16.27, 16.3, 0.85, 0.95, 8.5, 8.8, SCREEN);
@@ -852,7 +853,7 @@ railing(WK0, STZ0, 'z', MX2-0.03); railing(MX1+0.04, MX2, 'x', WK0+0.03); railin
 BY = MZ;
 for (const zc of [4.25, 8.75]){
   meetingTable(40.0, 41.0, zc-1.2, zc+1.2);
-  const sd = zc < MMID ? -1 : 1; box(39.7, 41.3, 1.0, 1.9, MMID+sd*0.1-0.025, MMID+sd*0.1+0.025, SCREEN);   // TV on the shared middle wall
+  const sd = zc < MMID ? -1 : 1; box(39.7, 41.3, 1.0, 1.9, MMID+sd*0.1-0.025, MMID+sd*0.1+0.025, TVSCREEN);   // TV on the shared middle wall
   box(40.42, 40.58, 2.16, 2.2, zc-0.9, zc+0.9, LIGHT); box(40.41, 40.59, 2.2, 2.24, zc-0.9, zc+0.9, FRAME);
   for (const z of [zc-0.6, zc+0.6]) box(40.494, 40.506, 2.24, f(z)-MZ, z-0.006, z+0.006, FRAME);
 }
@@ -956,7 +957,7 @@ front3e(4.82);
   }
 }
 // wall-mounted TV on a wall along z (face at x), screen facing +x (dir 1) or -x (dir -1), centred at z = zc, w wide, centre 1.5 m high
-function wallTV(x, dir, zc, w, yc){ const h = w*0.5625; yc = yc || 1.5; box(Math.min(x, x+dir*0.06), Math.max(x, x+dir*0.06), yc-h/2, yc+h/2, zc-w/2, zc+w/2, SCREEN); }
+function wallTV(x, dir, zc, w, yc){ const h = w*0.5625; yc = yc || 1.5; box(Math.min(x, x+dir*0.06), Math.max(x, x+dir*0.06), yc-h/2, yc+h/2, zc-w/2, zc+w/2, TVSCREEN); }
 // Service Desk fit-out (after the team's seat plan, spread out over the bigger room z 4.82–13): 4 desks along wall B (seats 1–4);
 // a 6-desk island with an end desk (seats 5–11); a second 6-desk island (seats 12–17); dark gray cabinet with a TV above on the wall
 // shared with Belfort (x = 42). Desks 0.7 m deep, every desk with a PC screen; ≈ 1.25 m between facing chairs.
@@ -1178,8 +1179,9 @@ function frame(){
   const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 4 ? stairY(px, pz) : 0;
   const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   camera.position.set(px, EYE + fy, pz); camera.rotation.set(pitch, yaw, 0);
-  const st = GAME.state; st.x = px; st.y = fy; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused;
+  const st = GAME.state; st.x = px; st.y = fy; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone;
   if (window.__onFrame) window.__onFrame(dt);
+  if (window.__onFrameClock) window.__onFrameClock(dt);
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
   const ht = nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
@@ -1188,11 +1190,14 @@ function frame(){
   renderer.render(scene, camera); drawMap();
   requestAnimationFrame(frame);
 }
+// bridge for clock.js (time of day): lights, materials and doors it changes
+Object.assign(GAME, {hemi, amb, sun, LIGHT, SCREEN, TVSCREEN, doors, DOOR_OPEN});
 frame();
 window.dispatchEvent(new Event('game-ready'));
 }
 </script>
 <script src="config.js"></script>
 <script type="module" src="mp.js"></script>
+<script type="module" src="clock.js"></script>
 </body>
 </html>
