@@ -7,6 +7,7 @@
 // - On the live site with an empty config.js: multiplayer is off and you walk alone.
 import {cleanAvatar, defaultAvatar, buildAvatar, animateAvatar, makeNameTag} from './avatar.js';
 import {openCreator, avatarPicture} from './creator.js';
+import {play, spatial} from './sound.js';
 
 const CFG = window.OFFICE_CONFIG || {};
 const MSAL_URL = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/+esm';
@@ -76,12 +77,17 @@ async function firebaseNet(){
     send(d){ if (!joined) return; Object.assign(joined, d); D.update(me, Object.assign({}, d, {t: D.serverTimestamp()})); },
     leave(){ joined = null; D.set(me, null); },
     subscribe(cb){ const p = D.ref(db, 'presence'); D.onChildAdded(p, s => cb('add', s.key, s.val())); D.onChildChanged(p, s => cb('change', s.key, s.val())); D.onChildRemoved(p, s => cb('remove', s.key)); },
+    // doors/<index> = {o: open?}: shared, so a door someone opens is open for everyone
+    setDoor(i, o){ D.set(D.ref(db, 'doors/' + i), {o, t: D.serverTimestamp()}).catch(e => console.warn('door not shared:', e.message)); },
+    onDoors(cb){ const p = D.ref(db, 'doors'), f = s => { const v = s.val(); if (v) cb(+s.key, !!v.o); };
+      D.onChildAdded(p, f, e => console.warn('doors not shared:', e.message)); D.onChildChanged(p, f); },
   };
 }
 
 function localNet(){
-  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, mine = null;
+  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, mine = null;
   bc.onmessage = e => { const {type, key, data} = e.data || {}; if (!key || key === myKey) return;
+    if (type === 'door') return doorCb(e.data.i, e.data.o);
     if (type === 'hello'){ if (mine) bc.postMessage({type: 'state', key: myKey, data: mine}); return; }
     if (type === 'bye') return cb('remove', key);
     if (type === 'state') cb('change', key, data); };
@@ -94,6 +100,8 @@ function localNet(){
     send(d){ if (!mine) return; Object.assign(mine, d, {t: Date.now()}); bc.postMessage({type: 'state', key: myKey, data: mine}); },
     leave(){ mine = null; bc.postMessage({type: 'bye', key: myKey}); },
     subscribe(f){ cb = f; },
+    setDoor(i, o){ bc.postMessage({type: 'door', key: myKey, i, o}); },
+    onDoors(f){ doorCb = f; },
   };
 }
 
@@ -107,21 +115,116 @@ function dropRemote(key){
   remotes.delete(key);
 }
 
+let subscribedAt = 0;
 function onPresence(type, key, v){
   if (!G || key === net.myKey) return;
-  if (type === 'remove' || !v){ dropRemote(key); return refreshOnline(); }
+  if (type === 'remove' || !v){ const r = remotes.get(key); if (r && joined) logLine('', `${r.name} left`); dropRemote(key); return refreshOnline(); }
   if (typeof v.x !== 'number' || typeof v.z !== 'number') return;
   if (v.t && net.now() - v.t > 120000) return;                         // left without saying goodbye
   const name = String(v.n || 'Colleague').slice(0, 20), av = cleanAvatar(v.a), look = JSON.stringify(av) + '|' + name;
   let r = remotes.get(key);
+  if (!r && joined && performance.now() - subscribedAt > 3000){
+    // someone new arrived: they step out of the lift next to the entrance
+    const s = spatial(30.98, 5.0, v.l || 0, 16); play('lift', s.g, s.p); logLine('', `${name} arrived`);
+  }
   if (!r || r.look !== look){
     const keep = r; if (r) dropRemote(key);
     const obj = buildAvatar(G.THREE, av); obj.add(makeNameTag(G.THREE, name)); G.scene.add(obj);
-    r = {obj, look, x: keep ? keep.x : v.x, y: keep ? keep.y : (v.y || 0), z: keep ? keep.z : v.z, r: keep ? keep.r : (v.r || 0)};
+    r = {obj, look, x: keep ? keep.x : v.x, y: keep ? keep.y : (v.y || 0), z: keep ? keep.z : v.z, r: keep ? keep.r : (v.r || 0), ct: keep && keep.ct};
     remotes.set(key, r);
   }
   r.tx = v.x; r.ty = v.y || 0; r.tz = v.z; r.tr = v.r || 0; r.l = v.l || 0; r.name = name; r.color = av.shirt; r.seen = performance.now();
+  // a new chat message (c = text, ct = when): bubble above their head and a line in the chat log
+  if (v.c && v.ct && v.ct !== r.ct){ r.ct = v.ct; if (net.now() - v.ct < 15000) showChat(r, name, String(v.c).slice(0, MAXCHAT)); }
   refreshOnline();
+}
+
+// ---------- chat ----------
+const MAXCHAT = 120;
+const CHAT_CSS = `
+#chatLog{position:fixed;left:10px;bottom:50px;max-width:min(420px,72vw);display:flex;flex-direction:column;align-items:flex-start;gap:4px;pointer-events:none;z-index:2}
+#chatLog div{background:rgba(20,24,30,.62);color:#fff;border-radius:10px;padding:5px 10px;font-size:13px;line-height:1.35;transition:opacity .8s;word-break:break-word}
+#chatLog div.sys{background:rgba(20,24,30,.4);font-style:italic}
+#chatLog b{font-weight:600}
+#chatBar{position:fixed;left:50%;bottom:50px;transform:translateX(-50%);width:min(520px,calc(100vw - 32px));display:none;z-index:6}
+#chatBar input{width:100%;box-sizing:border-box;font-size:16px;padding:10px 12px;border-radius:10px;border:2px solid #2f5d9e;background:rgba(255,255,255,.96);color:#1d2229;outline:none}
+.tbtn{position:fixed;right:18px;width:56px;height:56px;border-radius:50%;background:rgba(20,24,30,.45);border:2px solid rgba(255,255,255,.6);color:#fff;font-size:22px;display:none;align-items:center;justify-content:center;z-index:2;-webkit-user-select:none;user-select:none;touch-action:none}
+`;
+let chatLog, chatBar, chatIn, lastChat = 0;
+function chatUI(){
+  const st = document.createElement('style'); st.textContent = CHAT_CSS; document.head.appendChild(st);
+  chatLog = document.createElement('div'); chatLog.id = 'chatLog'; document.body.appendChild(chatLog);
+  chatBar = document.createElement('div'); chatBar.id = 'chatBar';
+  chatBar.innerHTML = `<input type="text" maxlength="${MAXCHAT}" placeholder="Say something… (Enter to send, Esc to cancel)" autocomplete="off" enterkeyhint="send" aria-label="Chat message">`;
+  document.body.appendChild(chatBar); chatIn = chatBar.querySelector('input');
+  chatIn.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter'){ e.preventDefault(); sendChat(chatIn.value); closeChat(); }
+    else if (e.key === 'Escape'){ e.preventDefault(); closeChat(); }
+  });
+  chatIn.addEventListener('blur', () => setTimeout(closeChat, 0));
+  addEventListener('keydown', e => {
+    const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return;
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyT') && !e.repeat && joined && G.state.started){ e.preventDefault(); openChat(); }
+  });
+  // touch screens: round buttons for chat and jumping
+  if (window.__isTouch){
+    for (const [id, label, bottom, fn] of [['jumpBtn', '⤒', 96, () => G.jump && G.jump()], ['chatBtn', '💬', 162, () => joined && openChat()]]){
+      const b = document.createElement('div'); b.id = id; b.className = 'tbtn'; b.textContent = label; b.style.bottom = bottom + 'px';
+      b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fn(); }); document.body.appendChild(b);
+    }
+  }
+}
+function openChat(){ if (chatBar.style.display === 'block') return; chatBar.style.display = 'block'; chatIn.value = ''; chatIn.focus(); }
+function closeChat(){ if (chatBar.style.display !== 'block') return; chatBar.style.display = 'none'; chatIn.blur(); }
+function sendChat(text){
+  text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MAXCHAT); const now = performance.now();
+  if (!text || !joined || now - lastChat < 700) return; lastChat = now;
+  net.send({c: text, ct: net.now()}); logLine(profile.name, text); play('pop', 0.4);
+}
+function logLine(name, text){
+  if (!chatLog) return;
+  const d = document.createElement('div');
+  if (name){ const b = document.createElement('b'); b.textContent = name + ': '; d.append(b, text); } else { d.className = 'sys'; d.textContent = text; }
+  chatLog.appendChild(d); while (chatLog.children.length > 6) chatLog.firstChild.remove();
+  setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 900); }, 20000);
+}
+function showChat(r, name, text){
+  logLine(name, text);
+  if (r.bubble){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); }
+  r.bubble = makeBubble(G.THREE, text); r.obj.add(r.bubble); r.bubbleUntil = performance.now() + 6000 + text.length*60;
+  const s = spatial(r.x, r.z, r.l || 0, 20); play('pop', Math.max(0.15, s.g)*0.6, s.p);
+}
+// speech bubble sprite above an avatar's name tag
+function makeBubble(THREE, text){
+  const c = document.createElement('canvas'), g = c.getContext('2d'), W = 512, F = 30, PAD = 18, MAXW = W - PAD*2, font = `500 ${F}px system-ui,Segoe UI,sans-serif`;
+  g.font = font; const fit = s => { while (s.length > 1 && g.measureText(s).width > MAXW) s = s.slice(0, -1); return s; };
+  const lines = []; let line = '';
+  for (const w of text.split(' ')){ const t = line ? line + ' ' + w : w; if (g.measureText(t).width > MAXW && line){ lines.push(line); line = w; } else line = t; }
+  if (line) lines.push(line);
+  for (let i = 0; i < lines.length; i++) lines[i] = fit(lines[i]);
+  if (lines.length > 4){ lines.length = 4; lines[3] = fit(lines[3] + '…'); }
+  const tw = Math.max(...lines.map(l => g.measureText(l).width)), bw = Math.min(W - 4, tw + PAD*2), lh = F*1.25, bh = lines.length*lh + PAD*1.2;
+  c.width = W; c.height = Math.ceil(bh + 24); g.font = font;
+  const x0 = (W - bw)/2, r = 18;
+  g.fillStyle = 'rgba(255,255,255,0.96)'; g.beginPath();
+  g.moveTo(x0 + r, 2); g.arcTo(x0 + bw, 2, x0 + bw, bh, r); g.arcTo(x0 + bw, bh, x0, bh, r); g.arcTo(x0, bh, x0, 2, r); g.arcTo(x0, 2, x0 + bw, 2, r); g.fill();
+  g.beginPath(); g.moveTo(W/2 - 14, bh - 1); g.lineTo(W/2, bh + 20); g.lineTo(W/2 + 14, bh - 1); g.fill();
+  g.fillStyle = '#1d2229'; g.textBaseline = 'top'; lines.forEach((l, i) => g.fillText(l, x0 + PAD, PAD*0.6 + i*lh));
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: t, depthWrite: false, transparent: true}));
+  const k = 1.7/W; sp.scale.set(W*k, c.height*k, 1); sp.center.set(0.5, 0); sp.position.y = 2.24; sp.renderOrder = 2;
+  return sp;
+}
+
+// ---------- shared doors ----------
+const pendingClose = new Set();
+function insideDoor(d){ const c = d.rect, s = G.state, R = 0.3; return s.x > c[0]-R && s.x < c[1]+R && s.z > c[2]-R && s.z < c[3]+R; }
+function applyDoor(i, open){
+  const d = G && G.doors && G.doors[i]; if (!d) return;
+  if (open){ pendingClose.delete(i); d.target = G.DOOR_OPEN; }
+  else if (insideDoor(d)) pendingClose.add(i);   // you stand in the doorway: it closes once you step out
+  else d.target = 0;
 }
 
 function refreshOnline(){
@@ -145,7 +248,9 @@ function tick(dt){
     // someone standing right where you stand (e.g. both just spawned) would fill your whole view: hide them until you step apart
     r.obj.visible = !(Math.hypot(r.x - G.state.x, r.z - G.state.z) < 0.7 && Math.abs(r.y - G.state.y) < 1);
     animateAvatar(r.obj, moved*5.5, r.walk);
+    if (r.bubble && now > r.bubbleUntil){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); r.bubble = null; }
   }
+  for (const i of pendingClose){ const d = G.doors[i]; if (!d || !insideDoor(d)){ if (d) d.target = 0; pendingClose.delete(i); } }
   if (!joined) return;
   const s = G.state, round = n => Math.round(n*100)/100;
   const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv};
@@ -202,7 +307,10 @@ async function main(){
   catch (e){ console.error(e); status('Could not connect to multiplayer. You can walk around on your own.'); ui.go.style.display = ''; return; }
 
   G = await whenGame();
-  net.subscribe(onPresence);
+  chatUI();
+  subscribedAt = performance.now(); net.subscribe(onPresence);
+  net.onDoors(applyDoor);
+  window.__onDoor = (i, open) => { if (i >= 0) net.setDoor(i, open); };
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
 
   ui.login.querySelector('span').textContent = LOCAL ? 'Sign in (local test)' : 'Sign in with Microsoft';
@@ -226,6 +334,7 @@ addEventListener('office-start', () => {
   const s = G.state;
   net.join({n: profile.name, a: profile.avatar, x: s.x, y: s.y, z: s.z, r: s.yaw, l: s.lv});
   refreshOnline();
+  for (const b of document.querySelectorAll('.tbtn')) b.style.display = 'flex';
 });
 addEventListener('pagehide', () => { if (net && joined) net.leave(); });
 

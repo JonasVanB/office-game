@@ -28,7 +28,6 @@ const P = {
   kitchen3: {x: 35.3, z: 12.15, lv: 2}, kitchen4: {x: 39.4, z: 11.2, lv: 0}, portus: {x: 21, z: 10.3, lv: 0}, stille: {x: 43, z: 6.5, lv: 0},
   server: {x: 26.7, z: 10.3, lv: 0}, printer: {x: 16.6, z: 8.8, lv: 0},
 };
-const LIFTS = [[29.85, 0], [32.12, 0], [29.85, 2], [32.12, 2]].map(([x, lv]) => ({x, z: 5.0, lv}));
 const DESKS = [[0, 14, 0, 13, 0], [14, 28, 0, 5.3, 0], [39, 50, 0, 5.3, 0], [42, 50, 4.8, 13, 2]];   // x0 x1 z0 z1 level: where people type
 const CLEAN_SPOTS = [{x: 7, z: 6.5, lv: 0}, {x: 44, z: 3, lv: 0}, {x: 21, z: 6.5, lv: 0}, {x: 46, z: 9, lv: 2}];
 const SERVER_ALERTS = [
@@ -258,22 +257,30 @@ function tick(dt){
   if (!sound.ready) return;
   const occ = min < 420 ? 0 : min < 540 ? 0.1 + 0.9*(min - 420)/120 : min < 1020 ? 1 : min < 1140 ? 0.15 : 0;
   const near = (p, r) => spatial(p.x, p.z, p.lv, r);
-  let desk = {g: 0, p: 0, x: 0, z: 0};
-  for (const d of DESKS){ const x = Math.max(d[0], Math.min(d[1], st.x)), z = Math.max(d[2], Math.min(d[3], st.z)), s = spatial(x, z, d[4], 12); if (s.g > desk.g) desk = {g: s.g, p: s.p, x, z}; }
-  loop('hvac', min >= 420 && min < 1140 ? 0.05 : 0.03);
-  let mur = occ*desk.g*0.06, murPan = desk.p;
-  if (current && current.pos){ const s = near(current.pos, 16); if (s.g*0.25 > mur){ mur = s.g*0.25; murPan = s.p; } }
-  loop('murmur', mur, murPan);
+  // the work area closest to you; office sounds come from random spots in it, a few metres around you
+  let desk = {g: 0, d: null};
+  for (const d of DESKS){ const x = Math.max(d[0], Math.min(d[1], st.x)), z = Math.max(d[2], Math.min(d[3], st.z)), s = spatial(x, z, d[4], 14); if (s.g > desk.g) desk = {g: s.g, d}; }
+  const deskSpot = () => { const d = desk.d; if (!d) return {g: 0, p: 0};
+    return spatial(Math.max(d[0], Math.min(d[1], st.x + (Math.random() - 0.5)*14)), Math.max(d[2], Math.min(d[3], st.z + (Math.random() - 0.5)*10)), d[4], 14); };
+  const at = (fx, vol, p) => { const s = p ? near(p, 14) : deskSpot(); if (s.g > 0.01) play(fx, s.g*vol, s.p); };
   { const s = near(P.server, 7); loop('server', s.g*(build ? 0.3 : 0.16), s.p); }
   if (clean){ const t = nowS*0.15, x = clean.pos.x + Math.sin(t)*4, s = spatial(x, clean.pos.z + Math.cos(t*1.3)*2, clean.pos.lv, 18); loop('vacuum', s.g*0.18, s.p); } else loop('vacuum', 0);
   loop('fire', fire ? (lv === 0 ? 0.45 : 0.32) : 0); loop('siren', burglar ? 0.35 : 0);
   const chance = rate => Math.random() < dt*rate;
-  if (desk.g > 0.02 && chance(occ*1.4)) play('keys', desk.g*0.7, desk.p);
-  if (chance(min >= 420 && min < 570 ? 1/14 : occ > 0.5 ? 1/45 : 1/240)){ const l = LIFTS[Math.random()*4 | 0], s = near(l, 11); play('lift', s.g, s.p); }
-  if (current && (current.kind === 'coffee' || current.kind === 'lunch' || current.kind === 'fries') && chance(1/12)){ const s = near(current.pos, 12); play('coffee', s.g, s.p); }
-  else if (occ > 0.5 && chance(1/90)){ const s = near(Math.random() < 0.5 ? P.kitchen3 : P.kitchen4, 12); play('coffee', s.g, s.p); }
-  if (occ > 0.5 && chance(1/80)){ const s = near(P.printer, 10); play('printer', s.g, s.p); }
-  if (occ > 0.5 && chance(1/70)) play('phone', desk.g*0.5, desk.p);
+  // working: typing, clicking, chairs, mugs, colleagues talking and the odd laugh
+  if (desk.g > 0.02){
+    if (chance(occ*1.6)) at('keys', 0.7); if (chance(occ*0.9)) at('mouse', 0.8);
+    if (chance(occ*0.45)) at('voices', 0.9); if (chance(occ*0.05)) at('laugh', 0.8);
+    if (chance(occ*0.12)) at('chair', 1); if (chance(occ*0.1)) at('mug', 1);
+  }
+  // gatherings (coffee, lunch, meeting, after work): chatter, laughter, mugs and the coffee machine where it happens
+  if (current && current.pos){
+    if (chance(2.2)) at('voices', 1, current.pos); if (chance(0.3)) at('laugh', 1, current.pos); if (chance(0.5)) at('mug', 1, current.pos);
+    if ((current.kind === 'coffee' || current.kind === 'lunch' || current.kind === 'fries') && chance(1/12)) at('coffee', 1, current.pos);
+  }
+  else if (occ > 0.5 && chance(1/90)) at('coffee', 1, Math.random() < 0.5 ? P.kitchen3 : P.kitchen4);
+  if (occ > 0.5 && chance(1/80)) at('printer', 1, P.printer);
+  if (occ > 0.5 && chance(1/120)) at('phone', 0.5);
   if (server && chance(1/3)){ const s = near(P.server, 16); play('beep', s.g, s.p); }
   if (occ === 0 && !spooky && chance(1/40)) play('creak', 0.5, Math.random()*2 - 1);
   if (spooky && nowS > spookNext){
@@ -291,6 +298,7 @@ function spookDoor(st){
   if (!ds.length){ play('steps', 0.8, Math.random()*2 - 1); return; }
   const d = ds[Math.random()*ds.length | 0], s = spatial(d.ctr[0], d.ctr[1], st.lv, 18);
   if (d.target > 0){ d.target = 0; play('slam', Math.max(0.3, s.g), s.p); } else { d.target = G.DOOR_OPEN; play('creak', Math.max(0.3, s.g), s.p); }
+  if (window.__onDoor) window.__onDoor(G.doors.indexOf(d), d.target > 0);   // everyone sees the ghost
 }
 
 function init(){

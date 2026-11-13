@@ -82,7 +82,7 @@ window.__isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches
 document.getElementById('howto').textContent = window.__isTouch
   ? 'Drag on the left side to walk (a joystick appears). Drag on the right side to look around.'
   : 'Move the mouse to look around (no clicking needed). WASD or arrow keys to walk, Shift to run, E to open or close the door in front of you. Press Esc to pause and get your mouse back.';
-document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · E: doors · M: sound · Esc: pause';
+document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · Space: jump · E: doors · Enter: chat · M: sound · Esc: pause';
 window.__showErr = function(m){ var e = document.getElementById('msg'); e.textContent = m; e.style.display = 'block'; };
 function __start(ev){ if (ev) ev.preventDefault(); document.getElementById('start').style.display = 'none'; window.__started = true; window.dispatchEvent(new Event('office-start')); if (window.__onStart) window.__onStart(); else if (!window.__ready) window.__showErr('Loading 3D… one moment.'); }
 document.getElementById('go').addEventListener('click', __start);
@@ -1089,12 +1089,17 @@ function blocked(x, z){ for (const c of colliders){ if ((c[4] || 0) !== mode) co
 // the door you are standing in front of (same level, within 1.6 m); E or a tap on the prompt opens / closes it
 const doorHint = document.getElementById('doorHint'); let nearDoor = null, lastHint = '';
 function findNearDoor(){ const lv = doorLevel(); let best = null, bd = 1.6; for (const d of doors){ if (d.level !== lv) continue; const dd = Math.hypot(px - d.ctr[0], pz - d.ctr[1]); if (dd < bd){ bd = dd; best = d; } } return best; }
-function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else d.target = DOOR_OPEN; }
+function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else d.target = DOOR_OPEN;
+  if (window.__onDoor) window.__onDoor(doors.indexOf(d), d.target > 0); }   // mp.js: the door opens / closes for everyone
+// jumping: Space (or the jump button on touch screens); only changes the view height, not where you can walk
+let hopY = 0, hopV = 0;
+function hop(){ if (started && !paused && hopY === 0 && hopV === 0) hopV = 3.3; }
+GAME.jump = hop;
 doorHint.addEventListener('click', e => { e.preventDefault(); toggleDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); toggleDoor(); });
 function look(dx, dy, s){ yaw -= dx*s; pitch -= dy*s; pitch = Math.max(-1.45, Math.min(1.45, pitch)); }
 const keys = {};
-addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ toggleDoor(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
+addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ toggleDoor(); return; } if (e.code === 'Space'){ e.preventDefault(); if (!e.repeat) hop(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; pause(); });
 // Mouse look without clicking: the "Start walking" click captures the mouse (pointer lock).
@@ -1178,8 +1183,9 @@ function frame(){
   else if (mode === 3){ if (px <= MX2) mode = 1; else if (px >= ST1) mode = 0; }
   const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 4 ? stairY(px, pz) : 0;
   const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
-  camera.position.set(px, EYE + fy, pz); camera.rotation.set(pitch, yaw, 0);
-  const st = GAME.state; st.x = px; st.y = fy; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone;
+  if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
+  camera.position.set(px, EYE + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
+  const st = GAME.state; st.x = px; st.y = fy + hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone;
   if (window.__onFrame) window.__onFrame(dt);
   if (window.__onFrameClock) window.__onFrameClock(dt);
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
