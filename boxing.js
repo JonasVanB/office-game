@@ -94,7 +94,7 @@ function use(){
     return true;
   }
   if (!G.state.started || G.controlLock) return false;
-  if (nearLever()){ if (busy()){ say('Not now: there is a fight going on!'); return true; } play('thud', 0.6, 0, true); setRing(!ringUp, true); return true; }
+  if (nearLever()){ if (busy()){ say('Not now: there is a fight going on!'); return true; } play('thud', 0.6, 0, true); if (!ringUp && window.__ach) window.__ach('b_secret'); setRing(!ringUp, true); return true; }
   if (!meInRing()) return false;
   const ch = challenger();
   if (ch){ begin(ch, false); fight.t0 = now() + COUNT*1000; fight.ph = 'count'; placeInCorner(); return true; }
@@ -220,7 +220,7 @@ function step(dt, keys){
     // what happened to my punches (their report)
     if (ob && ob.hit && f.myPunches.has(ob.hit.id) && !f.acked.has(ob.hit.id)){
       f.acked.add(ob.hit.id); const h = ob.hit;
-      if (h.r === 'hit' || h.r === 'counter' || h.r === 'break'){ f.stats.landed++; f.stats.dealt += h.d; popup(h.r === 'counter' ? 'COUNTER!' : h.r === 'break' ? 'Guard broken!' : 'Hit!', '#f2c230'); play('punch', 0.8, 0, f.myPunches.get(h.id) === 'h'); }
+      if (h.r === 'hit' || h.r === 'counter' || h.r === 'break'){ f.stats.landed++; f.stats.dealt += h.d; popup(h.r === 'counter' ? 'COUNTER!' : h.r === 'break' ? 'Guard broken!' : 'Hit!', '#f2c230'); if (h.r === 'counter' && window.__ach) window.__ach('b_counter'); play('punch', 0.8, 0, f.myPunches.get(h.id) === 'h'); }
       else if (h.r === 'block'){ popup('Blocked', '#cfd6de'); play('block', 0.6, 0); }
       else if (h.r === 'dodge') popup('Dodged', '#9cc3e6');
       else if (h.r === 'miss') popup('Missed', 'rgba(255,255,255,.8)');
@@ -242,6 +242,10 @@ function finish(why){
   else { const a = Math.round(f.hp), b = Math.round(f.oppHp); res = a > b ? ['🏆', 'You win on points!', `${a} – ${b}`] : a < b ? ['🥈', `${esc(f.vsName)} wins on points`, `${a} – ${b}`] : ['🤝', 'A draw', `${a} – ${b}`]; }
   const won = res[0] === '🏆'; if (won){ wins++; try { localStorage.setItem('office.boxWins', String(wins)); } catch (e) {} }
   play('bell', 1, 0, 3); if (won) setTimeout(() => play('cheer', 0.8, 0), 500);
+  // progress.js: XP and achievements
+  if (window.__ach){ const A = window.__ach; window.__stat('boxFights'); A('b_first');
+    if (won){ A('b_win'); window.__stat('boxWins'); if (why === 'win') A('b_ko'); if (f.stats.taken === 0) A('b_flawless'); }
+    if (f.stats.dodged >= 5) A('b_slip'); window.__xp(won ? 35 : 10, won ? 'Won a fight' : 'Fought in the ring'); }
   const st = f.stats, acc = st.thrown ? Math.round(st.landed/st.thrown*100) : 0;
   card.innerHTML = `<div style="font-size:30px;line-height:1">${res[0]}</div><h1 style="font-size:20px;margin:6px 0 2px;font-weight:600">${res[1]}</h1><div style="color:#454b55;margin-bottom:8px">${res[2]}</div>`
     + `<div style="display:grid;grid-template-columns:auto auto;gap:2px 18px;color:#454b55">`
