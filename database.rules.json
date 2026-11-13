@@ -14,6 +14,13 @@
         ".validate": "newData.hasChildren(['x', 'z', 't']) && newData.child('x').isNumber() && newData.child('z').isNumber() && (!newData.child('c').exists() || (newData.child('c').isString() && newData.child('c').val().length <= 120))"
       }
     },
+    "postits": {
+      ".read": true,
+      "$id": {
+        ".write": "$id.length <= 64",
+        ".validate": "newData.hasChildren(['n', 'h', 'z']) && newData.child('n').isString() && newData.child('n').val().length <= 20 && newData.child('h').isNumber() && newData.child('h').val() >= 2 && newData.child('h').val() <= 3.2 && newData.child('z').isNumber()"
+      }
+    },
     "doors": {
       ".read": true,
       "$i": {

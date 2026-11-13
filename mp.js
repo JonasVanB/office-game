@@ -8,6 +8,7 @@
 import {cleanAvatar, defaultAvatar, buildAvatar, animateAvatar, makeNameTag} from './avatar.js';
 import {openCreator, avatarPicture} from './creator.js';
 import {play, spatial} from './sound.js';
+import {initPostits} from './postit.js';
 
 const CFG = window.OFFICE_CONFIG || {};
 const MSAL_URL = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/+esm';
@@ -81,13 +82,21 @@ async function firebaseNet(){
     setDoor(i, o){ D.set(D.ref(db, 'doors/' + i), {o, t: D.serverTimestamp()}).catch(e => console.warn('door not shared:', e.message)); },
     onDoors(cb){ const p = D.ref(db, 'doors'), f = s => { const v = s.val(); if (v) cb(+s.key, !!v.o); };
       D.onChildAdded(p, f, e => console.warn('doors not shared:', e.message)); D.onChildChanged(p, f); },
+    // postits/<user id> = {n, h, z, c, t}: everyone's best post-it on the high-jump wall
+    setPostit(id, d){ D.set(D.ref(db, 'postits/' + id), d).catch(e => console.warn('post-it not saved:', e.message)); },
+    removePostit(id){ D.remove(D.ref(db, 'postits/' + id)).catch(() => {}); },
+    onPostits(cb){ const p = D.ref(db, 'postits');
+      D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('post-its not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
   };
 }
 
 function localNet(){
-  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, mine = null;
+  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, postitCb = () => {}, mine = null;
+  const localPostits = () => { try { return JSON.parse(localStorage.getItem('office.localPostits')) || {}; } catch (e){ return {}; } };
+  const savePostits = all => { try { localStorage.setItem('office.localPostits', JSON.stringify(all)); } catch (e){} };
   bc.onmessage = e => { const {type, key, data} = e.data || {}; if (!key || key === myKey) return;
     if (type === 'door') return doorCb(e.data.i, e.data.o);
+    if (type === 'postit') return postitCb(e.data.id, e.data.d);
     if (type === 'hello'){ if (mine) bc.postMessage({type: 'state', key: myKey, data: mine}); return; }
     if (type === 'bye') return cb('remove', key);
     if (type === 'state') cb('change', key, data); };
@@ -102,12 +111,16 @@ function localNet(){
     subscribe(f){ cb = f; },
     setDoor(i, o){ bc.postMessage({type: 'door', key: myKey, i, o}); },
     onDoors(f){ doorCb = f; },
+    // post-its: kept in this browser's localStorage, shared with the other tabs
+    setPostit(id, d){ const all = localPostits(); all[id] = d; savePostits(all); bc.postMessage({type: 'postit', key: myKey, id, d}); },
+    removePostit(id){ const all = localPostits(); delete all[id]; savePostits(all); bc.postMessage({type: 'postit', key: myKey, id, d: null}); },
+    onPostits(f){ postitCb = f; const all = localPostits(); for (const id in all) f(id, all[id]); },
   };
 }
 
 // ---------- other players in the 3D scene ----------
 const remotes = new Map();
-let G = null, net = null;
+let G = null, net = null, postits = null;
 
 function dropRemote(key){
   const r = remotes.get(key); if (!r) return;
@@ -250,6 +263,7 @@ function tick(dt){
     animateAvatar(r.obj, moved*5.5, r.walk);
     if (r.bubble && now > r.bubbleUntil){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); r.bubble = null; }
   }
+  if (postits) postits.update();
   for (const i of pendingClose){ const d = G.doors[i]; if (!d || !insideDoor(d)){ if (d) d.target = 0; pendingClose.delete(i); } }
   if (!joined) return;
   const s = G.state, round = n => Math.round(n*100)/100;
@@ -311,6 +325,7 @@ async function main(){
   subscribedAt = performance.now(); net.subscribe(onPresence);
   net.onDoors(applyDoor);
   window.__onDoor = (i, open) => { if (i >= 0) net.setDoor(i, open); };
+  postits = initPostits({G, net, me: () => joined && user && profile ? {id: user.id, name: profile.name} : null});
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
 
   ui.login.querySelector('span').textContent = LOCAL ? 'Sign in (local test)' : 'Sign in with Microsoft';

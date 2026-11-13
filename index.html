@@ -1341,8 +1341,14 @@ function findNearDoor(){ const lv = doorLevel(); let best = null, bd = 1.6; for 
 function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else d.target = DOOR_OPEN;
   if (window.__onDoor) window.__onDoor(doors.indexOf(d), d.target > 0); }   // mp.js: the door opens / closes for everyone
 // jumping: Space (or the jump button on touch screens); only changes the view height, not where you can walk
+// A run-up (Shift + forward) jumps higher. Pressing jump again in the air goes to GAME.onAirJump (postit.js: stick a post-it).
 let hopY = 0, hopV = 0;
-function hop(){ if (started && !paused && !GAME.controlLock && hopY === 0 && hopV === 0) hopV = 3.3; }
+function hop(){
+  if (!started || paused || GAME.controlLock) return;
+  if (hopY > 0 || hopV > 0){ if (GAME.onAirJump) GAME.onAirJump(hopY); return; }
+  const run = (keys.ShiftLeft || keys.ShiftRight) && (keys.KeyW || keys.ArrowUp || jvy < -0.5);
+  hopV = run ? 3.75 : 3.3;
+}
 GAME.jump = hop;
 // E / the prompt: a fixture (toilet.js) gets first go, otherwise the nearest door
 function useOrDoor(){ if (window.__onUse && window.__onUse()) return; toggleDoor(); }
@@ -1441,7 +1447,7 @@ function frame(){
   const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
   camera.position.set(px, EYE + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
-  const st = GAME.state; st.x = px; st.y = fy + hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone;
+  const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone;
   if (window.__onFrame) window.__onFrame(dt);
   if (window.__onFrameClock) window.__onFrameClock(dt);
   camera.updateMatrixWorld();
