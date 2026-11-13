@@ -136,6 +136,7 @@ function land(){
   play('thud', 0.9, 0.1, hit.mult === 0 && Math.hypot(f.u, f.v) > R_BOARD);
   s.darts++; s.turn.push(hit);
   if (hit.bull) play('ding', 0.9, 0); else if (hit.mult === 3) play('ding', 0.7, 0);
+  const A = window.__ach || (() => {}); A('d_first'); if (hit.bull) A('d_bull'); if (hit.label === 'T20') A('d_t20'); if (hit.label === 'Missed the board') A('d_miss');
   if (s.game === '501') score501(hit);
   else if (s.game === 'atc'){
     const ok = s.target === 25 ? hit.num === 25 : hit.num === s.target && hit.mult > 0;
@@ -150,7 +151,7 @@ function land(){
 function score501(hit){
   const s = state, rest = s.score - hit.val;
   if (rest < 0 || rest === 1 || (rest === 0 && hit.mult !== 2)){
-    say(`Bust! (${hit.label})`, 'bad'); play('buzz', 0.8, 0); s.score = s.turnStart; s.bust = true; while (s.turn.length < 3) s.turn.push(null); return;
+    say(`Bust! (${hit.label})`, 'bad'); window.__ach && window.__ach('d_bust'); play('buzz', 0.8, 0); s.score = s.turnStart; s.bust = true; while (s.turn.length < 3) s.turn.push(null); return;
   }
   s.score = rest;
   if (rest === 0){ say(`Checkout on ${hit.label}! 🎉`, 'good'); finish(); return; }
@@ -158,6 +159,7 @@ function score501(hit){
 }
 function endTurn(){
   const s = state, tot = s.turn.reduce((a, h) => a + (h ? h.val : 0), 0);
+  if (!s.bust && s.game !== 'atc' && window.__ach){ if (tot >= 100) window.__ach('d_100'); if (tot >= 140) window.__ach('d_140'); if (tot === 180) window.__ach('d_180'); }
   if (!s.bust && tot === 180){ say('ONE HUNDRED AND EIGHTY! 🎯', 'good'); play('cheer', 1, 0); window.__mpSay && window.__mpSay('🎯 threw 180 at darts!'); }
   else if (!s.bust && s.game !== 'atc' && tot >= 100) say(`${tot}! Nice turn`, 'good');
   s.phase = 'collect'; s.collectAt = performance.now()/1000 + 1.4;
@@ -170,6 +172,11 @@ function nextTurn(){
 function finish(){
   const s = state; s.phase = 'over'; hud.style.display = 'none';
   const k = s.game, val = k === 'hs' ? s.score : s.darts, better = bests[k] == null || (k === 'hs' ? val > bests[k] : val < bests[k]);
+  // progress.js: XP and achievements
+  if (window.__ach){ const A = window.__ach, X = window.__xp; window.__stat('dartsGames');
+    if (k === '501'){ A('d_501'); if (s.darts <= 21) A('d_501pro'); const last = s.turn[s.turn.length - 1]; if (last && last.bull) A('d_bullout'); X(30, 'Game of 501 finished'); }
+    if (k === 'atc'){ A('d_atc'); if (s.darts <= 30) A('d_atc30'); X(20, 'Around the Clock finished'); }
+    if (k === 'hs'){ if (s.score >= 300) A('d_hs300'); X(Math.max(5, Math.round(s.score/15)), '9-dart high score'); } }
   if (better){ bests[k] = val; saveBests(); }
   if (k === '501' || k === 'atc') play('cheer', 0.8, 0);
   const avg = k === '501' ? (501/s.darts*3).toFixed(1) : null;

@@ -1338,7 +1338,7 @@ function blocked(x, z){ for (const c of colliders){ if ((c[4] || 0) !== mode) co
 // the door you are standing in front of (same level, within 1.6 m); E or a tap on the prompt opens / closes it
 const doorHint = document.getElementById('doorHint'); let nearDoor = null, lastHint = '';
 function findNearDoor(){ const lv = doorLevel(); let best = null, bd = 1.6; for (const d of doors){ if (d.level !== lv) continue; const dd = Math.hypot(px - d.ctr[0], pz - d.ctr[1]); if (dd < bd){ bd = dd; best = d; } } return best; }
-function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else d.target = DOOR_OPEN;
+function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else { if (GAME.canOpen && !GAME.canOpen(d)){ if (GAME.onLocked) GAME.onLocked(d); return; } d.target = DOOR_OPEN; if (window.__stat) window.__stat("doors"); }
   if (window.__onDoor) window.__onDoor(doors.indexOf(d), d.target > 0); }   // mp.js: the door opens / closes for everyone
 // jumping: Space (or the jump button on touch screens); only changes the view height, not where you can walk
 // A run-up (Shift + forward) jumps higher. Pressing jump again in the air goes to GAME.onAirJump (postit.js: wall kick, stick a post-it).
@@ -1350,12 +1350,12 @@ function hop(){
   const run = (keys.ShiftLeft || keys.ShiftRight) && (keys.KeyW || keys.ArrowUp || jvy < -0.5);
   let v = run ? 3.75 : 3.3;
   if (GAME.onTakeoff){ const o = GAME.onTakeoff(v); if (o) v = o; }
-  hopV = v;
+  hopV = v; if (window.__stat) window.__stat("jumps");
 }
 GAME.jump = hop;
 GAME.boostHop = dv => { if (hopY > 0) hopV += dv; };
 // E / the prompt: a fixture (toilet.js) gets first go, otherwise the nearest door
-function useOrDoor(){ if (window.__onUse && window.__onUse()) return; if (window.__onUseDarts && window.__onUseDarts()) return; if (window.__onUseTiles && window.__onUseTiles()) return; toggleDoor(); }   // toilet.js, darts.js, tiles.js, then doors
+function useOrDoor(){ if (window.__onUse && window.__onUse()) return; if (window.__onUseDarts && window.__onUseDarts()) return; if (window.__onUseTiles && window.__onUseTiles()) return; for (const f of window.__useHooks || []) if (f()) return; toggleDoor(); }   // toilet.js, darts.js, tiles.js, other modules (window.__useHooks), then doors
 doorHint.addEventListener('click', e => { e.preventDefault(); useOrDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); useOrDoor(); });
 // toilet.js: put the player on a spot looking a given way; while GAME.controlLock is set, walking stops and mouse / touch go to GAME.onAim
@@ -1458,10 +1458,12 @@ function frame(){
   const toiletHint = window.__onFrameToilet ? window.__onFrameToilet(dt, keys) : '';   // toilet.js: draws the minigame, returns its prompt
   const dartsHint = window.__onFrameDarts ? window.__onFrameDarts(dt, keys) : '';      // darts.js: same for the dartboards
   const tilesHint = window.__onFrameTiles ? window.__onFrameTiles() : '';               // tiles.js: the tile you look at on the desk 6 divider
-  const useHint = toiletHint || dartsHint || (nearDoor ? '' : tilesHint);
+  let hookHint = ''; for (const f of window.__hintHooks || []){ hookHint = f(); if (hookHint) break; }   // other modules, e.g. tickets.js
+  const useHint = toiletHint || dartsHint || hookHint || (nearDoor ? '' : tilesHint);
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
-  const ht = useHint ? useHint : GAME.controlLock ? '' : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
+  const locked = nearDoor && nearDoor.target <= 0 && GAME.lockText ? GAME.lockText(nearDoor) : '';
+  const ht = useHint ? useHint : GAME.controlLock ? '' : locked ? locked : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
   if (ht !== lastHint){ lastHint = ht; doorHint.textContent = ht; doorHint.style.display = ht ? 'block' : 'none'; }
   const zn = zoneName(px, pz); if (zn !== lastZone){ zoneEl.textContent = zn; lastZone = zn; }
   renderer.render(scene, camera); drawMap();

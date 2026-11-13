@@ -128,6 +128,7 @@ export function initTiles({G, net, me}){
     if (!q){ closeCard(); return; }
     const k = editing.at.k, d = {q, n: who.name, by: who.id, t: Date.now()};
     tiles.set(k, d); paint(editing.at.pi); net.setTile(k, d);
+    if (window.__ach && !editing.mine){ window.__ach('t_first'); window.__xp(5, 'Tile on the wall'); if ([...tiles.values()].filter(t => t.by === who.id).length >= 5) window.__ach('t_five'); }
     try { window.__mpSay && !editing.mine && window.__mpSay(`🟦 put a tile on the divider at desk 6: “${q}”`); } catch (e) {}
     closeCard();
   }

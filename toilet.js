@@ -51,6 +51,7 @@ function finish(){
   const T = Math.max(0.01, s.t), on = s.onT/T, inb = (s.onT + s.inT)/T, score = Math.round(s.score), isBest = score > best;
   if (isBest){ best = score; try { localStorage.setItem('office.peeBest', String(best)); } catch (e) {} }
   const rating = s.t < 2 ? ['🫣', 'Stage fright'] : on > 0.55 ? ['🎯', 'Sniper'] : on > 0.3 ? ['👌', 'Steady hand'] : s.missT > T*0.4 ? ['🧽', 'Get the mop'] : on > 0.12 ? ['🙂', 'Could be worse'] : ['🌀', 'Free spirit'];
+  if (window.__ach){ window.__ach('wc_first'); window.__stat('toilet'); if (rating[1] === 'Sniper') window.__ach('wc_sniper'); if (rating[1] === 'Get the mop') window.__ach('wc_mop'); window.__xp(Math.min(30, Math.round(score/40)), 'Toilet visit'); }   // progress.js
   card.innerHTML = `<div style="font-size:30px;line-height:1">${rating[0]}</div><h1 style="font-size:20px;margin:6px 0 8px;font-weight:600">${rating[1]}</h1>`
     + `<div style="display:grid;grid-template-columns:auto auto;gap:2px 18px;color:#454b55"><span>Score</span><b style="color:#1d2229">${score}${isBest ? ' · new best!' : ''}</b>`
     + `<span>On the fly</span><b style="color:#1d2229">${Math.round(on*100)}%</b><span>In the bowl</span><b style="color:#1d2229">${Math.round(inb*100)}%</b>`

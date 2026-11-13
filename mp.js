@@ -10,6 +10,8 @@ import {openCreator, avatarPicture} from './creator.js';
 import {play, spatial} from './sound.js';
 import {initPostits} from './postit.js';
 import {initTiles} from './tiles.js';
+import {initProgress} from './progress.js';
+import {initTickets} from './tickets.js';
 
 const CFG = window.OFFICE_CONFIG || {};
 const MSAL_URL = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/+esm';
@@ -86,6 +88,11 @@ async function firebaseNet(){
     // postits/<user id> = {n, h, z, c, t}: everyone's best post-it on the high-jump wall
     setPostit(id, d){ D.set(D.ref(db, 'postits/' + id), d).catch(e => console.warn('post-it not saved:', e.message)); },
     removePostit(id){ D.remove(D.ref(db, 'postits/' + id)).catch(() => {}); },
+    // progress/<user id> = {xp, a (achievements), s (counters), d (daily), r (rooms seen), tk (today's tickets), n, t}
+    async loadProgress(id){ return (await D.get(D.ref(db, 'progress/' + id))).val(); },
+    saveProgress(id, d){ D.set(D.ref(db, 'progress/' + id), d).catch(e => console.warn('progress not saved:', e.message)); },
+    onProgress(cb){ const p = D.ref(db, 'progress');
+      D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('leaderboard not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
     // tiles/<panel>_<col>_<row> = {q, n, by, t}: quotes on the tile wall at desk 6
     setTile(k, d){ D.set(D.ref(db, 'tiles/' + k), d).catch(e => console.warn('tile not saved:', e.message)); },
     removeTile(k){ D.remove(D.ref(db, 'tiles/' + k)).catch(() => {}); },
@@ -125,6 +132,9 @@ function localNet(){
     setPostit(id, d){ const all = localPostits(); all[id] = d; savePostits(all); bc.postMessage({type: 'postit', key: myKey, id, d}); },
     removePostit(id){ const all = localPostits(); delete all[id]; savePostits(all); bc.postMessage({type: 'postit', key: myKey, id, d: null}); },
     onPostits(f){ postitCb = f; const all = localPostits(); for (const id in all) f(id, all[id]); },
+    async loadProgress(id){ try { return JSON.parse(localStorage.getItem('office.localProgress.' + id)); } catch (e){ return null; } },
+    saveProgress(id, d){ try { localStorage.setItem('office.localProgress.' + id, JSON.stringify(d)); } catch (e){} },
+    onProgress(f){ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('office.localProgress.')) try { f(k.slice(21), JSON.parse(localStorage.getItem(k))); } catch (e){} } },
     setTile(id, d){ const all = localTiles(); all[id] = d; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d}); },
     removeTile(id){ const all = localTiles(); delete all[id]; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d: null}); },
     onTiles(f){ tileCb = f; const all = localTiles(); for (const id in all) f(id, all[id]); },
@@ -133,7 +143,7 @@ function localNet(){
 
 // ---------- other players in the 3D scene ----------
 const remotes = new Map();
-let G = null, net = null, postits = null;
+let G = null, net = null, postits = null, prog = null, tickets = null;
 
 function dropRemote(key){
   const r = remotes.get(key); if (!r) return;
@@ -185,7 +195,7 @@ function chatUI(){
   document.body.appendChild(chatBar); chatIn = chatBar.querySelector('input');
   chatIn.addEventListener('keydown', e => {
     e.stopPropagation();
-    if (e.key === 'Enter'){ e.preventDefault(); sendChat(chatIn.value); closeChat(); }
+    if (e.key === 'Enter'){ e.preventDefault(); if (sendChat(chatIn.value) && window.__stat){ window.__ach('chat'); window.__stat('chat'); } closeChat(); }
     else if (e.key === 'Escape'){ e.preventDefault(); closeChat(); }
   });
   chatIn.addEventListener('blur', () => setTimeout(closeChat, 0));
@@ -206,7 +216,7 @@ function closeChat(){ if (chatBar.style.display !== 'block') return; chatBar.sty
 function sendChat(text){
   text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MAXCHAT); const now = performance.now();
   if (!text || !joined || now - lastChat < 700) return; lastChat = now;
-  net.send({c: text, ct: net.now()}); logLine(profile.name, text); play('pop', 0.4);
+  net.send({c: text, ct: net.now()}); logLine(profile.name, text); play('pop', 0.4); return true;
 }
 function logLine(name, text){
   if (!chatLog) return;
@@ -277,6 +287,8 @@ function tick(dt){
     if (r.bubble && now > r.bubbleUntil){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); r.bubble = null; }
   }
   if (postits) postits.update();
+  if (prog) prog.tick();
+  if (tickets) tickets.update();
   for (const i of pendingClose){ const d = G.doors[i]; if (!d || !insideDoor(d)){ if (d) d.target = 0; pendingClose.delete(i); } }
   if (!joined) return;
   const s = G.state, round = n => Math.round(n*100)/100;
@@ -342,6 +354,9 @@ async function main(){
   const me = () => joined && user && profile ? {id: user.id, name: profile.name} : null;
   postits = initPostits({G, net, me});
   initTiles({G, net, me});
+  prog = initProgress({G, net, me});
+  tickets = initTickets({G, prog, me});
+  window.__onlineCount = () => joined ? remotes.size + 1 : 0;
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
 
   ui.login.querySelector('span').textContent = LOCAL ? 'Sign in (local test)' : 'Sign in with Microsoft';

@@ -21,6 +21,13 @@
         ".validate": "newData.hasChildren(['n', 'h', 'z']) && newData.child('n').isString() && newData.child('n').val().length <= 20 && newData.child('h').isNumber() && newData.child('h').val() >= 2 && newData.child('h').val() <= 3.2 && newData.child('z').isNumber()"
       }
     },
+    "progress": {
+      ".read": true,
+      "$id": {
+        ".write": "$id.length <= 64",
+        ".validate": "newData.hasChildren(['xp', 'n']) && newData.child('xp').isNumber() && newData.child('xp').val() >= 0 && newData.child('xp').val() <= 100000 && newData.child('n').isString() && newData.child('n').val().length <= 20"
+      }
+    },
     "tiles": {
       ".read": true,
       "$k": {
