@@ -1486,8 +1486,8 @@ function frame(){
   let useHint = ''; for (const u of GAME.uses){ const h = u.tick(dt, keys); if (h && !useHint) useHint = h; }   // toilet.js, boards.js, sitting, darts, tickets, tiles
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
-  const locked = nearDoor && nearDoor.target <= 0 && GAME.lockText ? GAME.lockText(nearDoor) : '';
-  const ht = useHint ? useHint : GAME.controlLock ? '' : locked ? locked : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
+  const lockMsg = nearDoor && nearDoor.target <= 0 && GAME.lockText ? GAME.lockText(nearDoor) : '';   // not 'locked': that name is the pointer lock
+  const ht = useHint ? useHint : GAME.controlLock ? '' : lockMsg ? lockMsg : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
   if (ht !== lastHint){ lastHint = ht; doorHint.textContent = ht; doorHint.style.display = ht ? 'block' : 'none'; }
   const zn = zoneName(px, pz); if (zn !== lastZone){ zoneEl.textContent = zn; lastZone = zn; }
   renderer.render(scene, camera); drawMap();
