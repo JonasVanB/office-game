@@ -117,6 +117,13 @@ const FX = {
     const g2 = ctx.createGain(); g2.connect(d); env(g2, t + 2.2, 0.5, 2.5, 1.2, 0.06*v); noise(g2, t + 2.2, 4.5, 'highpass', 4000); },
   // a hit on the target: a short bright ding
   ding(v, pan){ const d = out(pan), t = ctx.currentTime; tone(d, t, 0.25, 1320, 'sine', 0.1*v); tone(d, t + 0.06, 0.3, 1980, 'sine', 0.06*v); },
+  // boxing: a glove landing (heavy = hook), a hit on the guard, the ring bell, the secret ring rising out of the floor
+  punch(v, pan, heavy){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.02, heavy ? 0.22 : 0.12, 0.7*v); noise(g, t, 0.3, 'lowpass', heavy ? 700 : 1100);
+    tone(d, t, heavy ? 0.25 : 0.14, heavy ? 75 : 110, 'sine', 0.5*v); },
+  block(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.01, 0.08, 0.4*v); noise(g, t, 0.15, 'bandpass', 1300, 1.2); tone(d, t, 0.1, 180, 'triangle', 0.15*v); },
+  bell(v, pan, n){ const d = out(pan), t = ctx.currentTime; for (let i = 0; i < (n || 1); i++){ tone(d, t + i*0.32, 1.6, 1180, 'sine', 0.22*v, 0.003); tone(d, t + i*0.32, 1.1, 2950, 'sine', 0.07*v, 0.003); tone(d, t + i*0.32, 1.4, 1530, 'sine', 0.06*v, 0.003); } },
+  rumble(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.4, 2.0, 0.8, 0.5*v); noise(g, t, 3.4, 'lowpass', 160);
+    const o = tone(d, t, 3.0, 48, 'sawtooth', 0.08*v, 0.4); o.frequency.linearRampToValueAtTime(70, t + 2.6); },
   // building creak at night
   creak(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 1.2, 70, 'sawtooth', 0.05*v, 0.3); o.frequency.linearRampToValueAtTime(55, t + 1.2); },
 };

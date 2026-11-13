@@ -83,7 +83,7 @@ async function firebaseNet(){
     subscribe(cb){ const p = D.ref(db, 'presence'); D.onChildAdded(p, s => cb('add', s.key, s.val())); D.onChildChanged(p, s => cb('change', s.key, s.val())); D.onChildRemoved(p, s => cb('remove', s.key)); },
     // doors/<index> = {o: open?}: shared, so a door someone opens is open for everyone
     setDoor(i, o){ D.set(D.ref(db, 'doors/' + i), {o, t: D.serverTimestamp()}).catch(e => console.warn('door not shared:', e.message)); },
-    onDoors(cb){ const p = D.ref(db, 'doors'), f = s => { const v = s.val(); if (v) cb(+s.key, !!v.o); };
+    onDoors(cb){ const p = D.ref(db, 'doors'), f = s => { const v = s.val(); if (v) cb(isNaN(+s.key) ? s.key : +s.key, !!v.o); };   // 'rng' = the secret boxing ring lever
       D.onChildAdded(p, f, e => console.warn('doors not shared:', e.message)); D.onChildChanged(p, f); },
     // postits/<user id> = {n, h, z, c, t}: everyone's best post-it on the high-jump wall
     setPostit(id, d){ D.set(D.ref(db, 'postits/' + id), d).catch(e => console.warn('post-it not saved:', e.message)); },
@@ -183,7 +183,7 @@ function onPresence(type, key, v){
     remotes.set(key, r);
   }
   r.tx = v.x; r.ty = v.y || 0; r.tz = v.z; r.tr = v.r || 0; r.l = v.l || 0; r.name = name; r.color = av.shirt; r.seen = performance.now();
-  r.key = key; r.si = +v.si || 0; r.pe = v.pe || null;   // sitting (seat height) and the toilet game (toilet.js)
+  r.key = key; r.si = +v.si || 0; r.pe = v.pe || null; r.bx = v.bx || null;   // sitting (seat height), the toilet game (toilet.js), boxing (boxing.js)
   // a new chat message (c = text, ct = when): bubble above their head and a line in the chat log
   if (v.c && v.ct && v.ct !== r.ct){ r.ct = v.ct; if (net.now() - v.ct < 15000) showChat(r, name, String(v.c).slice(0, MAXCHAT)); }
   refreshOnline();
@@ -271,6 +271,7 @@ function makeBubble(THREE, text){
 const pendingClose = new Set();
 function insideDoor(d){ const c = d.rect, s = G.state, R = 0.3; return s.x > c[0]-R && s.x < c[1]+R && s.z > c[2]-R && s.z < c[3]+R; }
 function applyDoor(i, open){
+  if (i === 'rng'){ window.__ringUp = open; if (window.__onRing) window.__onRing(open); return; }   // boxing.js: the lever in Gravensteen
   const d = G && G.doors && G.doors[i]; if (!d) return;
   if (open){ pendingClose.delete(i); d.target = G.DOOR_OPEN; }
   else if (insideDoor(d)) pendingClose.add(i);   // you stand in the doorway: it closes once you step out
@@ -300,6 +301,7 @@ function tick(dt){
     animateAvatar(r.obj, moved*5.5, r.walk);
     if (r.si){ const L = r.obj.userData.limbs; L.legL.rotation.x = L.legR.rotation.x = Math.PI/2*0.92; L.armL.rotation.x = L.armR.rotation.x = 0.55;   // sitting: legs forward, hands on the lap
       r.obj.position.y = r.y + r.si + 0.06 - 0.9; }
+    if (G.poseBoxer) G.poseBoxer(r.obj, r.bx, net.now());   // boxing.js: gloves, guard, punches
     if (r.bubble && now > r.bubbleUntil){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); r.bubble = null; }
   }
   if (postits) postits.update();
@@ -308,9 +310,9 @@ function tick(dt){
   for (const i of pendingClose){ const d = G.doors[i]; if (!d || !insideDoor(d)){ if (d) d.target = 0; pendingClose.delete(i); } }
   if (!joined) return;
   const s = G.state, round = n => Math.round(n*100)/100;
-  const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv, si: s.si || 0, pe: s.pe || null}, extra = JSON.stringify([cur.si, cur.pe]);
+  const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv, si: s.si || 0, pe: s.pe || null, bx: s.bx || null}, extra = JSON.stringify([cur.si, cur.pe, cur.bx]);
   const changed = !sent || Math.abs(cur.x - sent.x) > 0.02 || Math.abs(cur.z - sent.z) > 0.02 || Math.abs(cur.y - sent.y) > 0.02 || Math.abs(cur.r - sent.r) > 0.03 || cur.l !== sent.l || extra !== sent.extra;
-  if ((changed && now - lastSent > 110) || now - lastBeat > 15000){ net.send(cur); sent = Object.assign({extra}, cur); lastSent = lastBeat = now; }
+  if ((changed && now - lastSent > (s.bx ? 45 : 110)) || now - lastBeat > 15000){ net.send(cur); sent = Object.assign({extra}, cur); lastSent = lastBeat = now; }   // faster while boxing
 }
 
 function drawMapExtra(ctx, PAD, MS, level){
@@ -375,7 +377,8 @@ async function main(){
   window.__onlineCount = () => joined ? remotes.size + 1 : 0;
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
   // for toilet.js (duels, other people's streams), sitting (who sits where) and boards.js (shared drawings)
-  G.mp = {myKey: net.myKey, players: () => [...remotes.values()].map(r => ({key: r.key, name: r.name, x: r.x, y: r.ty, z: r.z, l: r.l || 0, si: r.si, pe: r.pe}))};
+  G.mp = {myKey: net.myKey, players: () => [...remotes.values()].map(r => ({key: r.key, name: r.name, x: r.x, y: r.ty, z: r.z, tx: r.tx, tz: r.tz, r: r.r, l: r.l || 0, si: r.si, pe: r.pe, bx: r.bx})),
+    setRing: up => net.setDoor('rng', up), now: () => net.now()};
   window.__seatTaken = c => { for (const r of remotes.values()) if (r.si && (r.l || 0) === (c.mode === 2 ? 2 : 0) && Math.hypot(r.tx - c.x, r.tz - c.z) < 0.3) return true; return false; };
   window.__boardNet = {add: (b, d) => net.addStroke(b, d), clear: b => net.clearBoard(b), listen: (b, add, removed) => net.onBoard(b, add, removed)};
   window.dispatchEvent(new Event('board-net'));

@@ -1162,7 +1162,40 @@ function wallTV(x, dir, zc, w, yc){ const h = w*0.5625; yc = yc || 1.5; box(Math
 }
 // Gravensteen (x 42–50, z 0–4.82): large TV on the wall against Dulle Griet, one big meeting table filling the room
 wallTV(42.05, 1, 2.41, 2.0, 1.45);
-meetingTable(43.4, 48.9, 1.45, 3.4); chair(48.9+CH, 2.425, faceAngle(-1, 0));
+// The table and chairs form one group (not merged) so they can sink into the floor when the secret boxing ring comes up (boxing.js)
+const GRAV = (() => {
+  const n0 = scene.children.length, c0 = colliders.length, ch0 = CHAIRS.length;
+  meetingTable(43.4, 48.9, 1.45, 3.4); chair(48.9+CH, 2.425, faceAngle(-1, 0));
+  const furn = new THREE.Group(); furn.userData.noMerge = true; for (const o of scene.children.slice(n0)) furn.add(o); scene.add(furn);
+  const coll = colliders.slice(c0), chairs = CHAIRS.slice(ch0);
+  // the ring: canvas with an apron, four corner posts with pads, three ropes, a light rig under the ceiling. Hidden under the floor until the lever is pulled.
+  const RX0 = 44.05, RX1 = 48.35, RZ0 = 0.42, RZ1 = 4.42, n1 = scene.children.length;
+  const canvasTex = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 476; const g = c.getContext('2d');
+    g.fillStyle = '#d6dce3'; g.fillRect(0, 0, 512, 476); g.strokeStyle = '#2342be'; g.lineWidth = 14; g.strokeRect(7, 7, 498, 462);
+    g.fillStyle = '#cf1430'; g.beginPath(); g.arc(256, 238, 92, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = '700 34px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('GRAVENSTEEN', 256, 222); g.font = '600 22px system-ui, sans-serif'; g.fillText('FIGHT NIGHT', 256, 260);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t; })();
+  box(RX0-0.3, RX1+0.3, 0, 0.06, RZ0-0.3, RZ1+0.3, mat(0x1d2b4f, {roughness: 0.8}));
+  { const m = new THREE.Mesh(PLANE, new THREE.MeshStandardMaterial({map: canvasTex, roughness: 0.9})); m.scale.set(RX1-RX0, RZ1-RZ0, 1); m.rotation.x = -Math.PI/2; m.position.set((RX0+RX1)/2, BY + 0.062, (RZ0+RZ1)/2); scene.add(m); }
+  const RED = mat(0xc62828, {roughness: 0.5}), BLUE = mat(0x2342be, {roughness: 0.5}), WHT = mat(0xf2f2ee, {roughness: 0.5}), POST = mat(0xb9bdc2, {roughness: 0.3, metalness: 0.7});
+  for (const [x, z, pad] of [[RX0, RZ0, RED], [RX1, RZ1, BLUE], [RX0, RZ1, WHT], [RX1, RZ0, WHT]]){
+    cyl(scene, 0.05, 1.3, x, BY + 0.71, z, POST); box(x-0.09, x+0.09, 0.4, 1.25, z-0.09, z+0.09, pad); }
+  [[0.45, RED], [0.8, WHT], [1.15, BLUE]].forEach(([y, m]) => {
+    box(RX0, RX1, y-0.018, y+0.018, RZ0-0.018, RZ0+0.018, m); box(RX0, RX1, y-0.018, y+0.018, RZ1-0.018, RZ1+0.018, m);
+    box(RX0-0.018, RX0+0.018, y-0.018, y+0.018, RZ0, RZ1, m); box(RX1-0.018, RX1+0.018, y-0.018, y+0.018, RZ0, RZ1, m); });
+  const TRUSS = mat(0x2a2c30, {roughness: 0.5, metalness: 0.5});
+  for (const [a, b] of [[RZ0+0.3, RZ0+0.34], [RZ1-0.34, RZ1-0.3]]) box(RX0+0.3, RX1-0.3, 2.42, 2.48, a, b, TRUSS);
+  for (const [a, b] of [[RX0+0.3, RX0+0.34], [RX1-0.34, RX1-0.3]]) box(a, b, 2.42, 2.48, RZ0+0.3, RZ1-0.3, TRUSS);
+  for (const x of [RX0+0.9, RX1-0.9]) for (const z of [RZ0+0.32, RZ1-0.32]){ box(x-0.1, x+0.1, 2.24, 2.42, z-0.1, z+0.1, TRUSS); box(x-0.08, x+0.08, 2.235, 2.24, z-0.08, z+0.08, basic(0xfff4d0)); }
+  const ring = new THREE.Group(); ring.userData.noMerge = true; for (const o of scene.children.slice(n1)) ring.add(o); scene.add(ring); ring.visible = false; ring.position.y = -1.6;
+  // the secret lever: a small plate on the end wall near the corner, handle up = table, handle down = ring
+  const n2 = scene.children.length, LX = 49.985, LY = 1.28, LZ = 3.95;
+  box(LX-0.015, 50, LY-0.14, LY+0.14, LZ-0.07, LZ+0.07, mat(0x5a5e64, {roughness: 0.45, metalness: 0.5}));
+  const handle = new THREE.Group(); handle.position.set(LX-0.02, BY + LY, LZ); part(handle, 0.025, 0.2, 0.025, 0, 0.1, 0, METAL); cyl(handle, 0.028, 0.06, 0, 0.21, 0, RED, SPH).scale.setScalar(0.03); handle.rotation.z = 0.55; scene.add(handle);
+  const lever = new THREE.Group(); lever.userData.noMerge = true; for (const o of scene.children.slice(n2)) lever.add(o); scene.add(lever);
+  return {x0: RX0, x1: RX1, z0: RZ0, z1: RZ1, base: BY, lv: 2, furn, ring, handle, lever: {x: LX, y: BY + LY, z: LZ},
+    setTable(on){ for (const c of coll) c[4] = on ? 2 : 99; for (const c of chairs) c.off = !on; }};
+})();
 // Dulle Griet and Belfort: TV on the wall toward Vlasmarkt / Kitchen (x = 38), meeting table in front of it
 wallTV(38.05, 1, 2.41, 1.65); meetingTable(39.0, 41.4, 1.91, 2.91);     // Dulle Griet
 wallTV(38.05, 1, 10.59, 1.65); meetingTable(39.0, 41.4, 10.09, 11.09);  // Belfort
@@ -1203,6 +1236,7 @@ function mergeStatic(){
   const buckets = new Map(), drop = [], v = new THREE.Vector3(), nm = new THREE.Matrix3();
   scene.traverse(o => {
     if (!o.isMesh || Array.isArray(o.material) || !o.geometry.attributes.position) return;
+    for (let p = o.parent; p; p = p.parent) if (p.userData.noMerge) return;   // things that move (the Gravensteen table, the boxing ring)
     const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
     v.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld);
     const key = o.material.uuid + '|' + Math.floor(v.x/10) + '|' + (v.y < -0.4 ? 0 : 1) + '|' + o.renderOrder;
@@ -1364,13 +1398,13 @@ doorHint.addEventListener('click', e => { e.preventDefault(); useOrDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); useOrDoor(); });
 // Minigames put the player on a spot looking a given way (GAME.setView). While GAME.controlLock holds an object, walking and looking stop
 // and the mouse / touch go to it instead: lock.aim(dx, dy, speed, screenX, screenY, absolute) and lock.press(down, screenX, screenY).
-GAME.fixtures = FIXTURES; GAME.boards = BOARDS; GAME.chairs = CHAIRS;
+GAME.fixtures = FIXTURES; GAME.boards = BOARDS; GAME.chairs = CHAIRS; GAME.ring = GRAV;
 GAME.setView = (x, z, y, p) => { px = x; pz = z; yaw = y; pitch = p; hopY = hopV = 0; };
 GAME.getView = () => ({x: px, z: pz, yaw, pitch, mode});
 // ---------- sitting: E next to a chair or stool sits you down (you can still look around); E again or walking gets you up ----------
 let seat = null;
 function nearChair(){ let best = null, bd = 0.8;
-  for (const c of CHAIRS){ if (c.mode !== mode) continue; const d = Math.hypot(px - c.x, pz - c.z); if (d < bd && !(window.__seatTaken && window.__seatTaken(c))){ bd = d; best = c; } }
+  for (const c of CHAIRS){ if (c.mode !== mode || c.off) continue; const d = Math.hypot(px - c.x, pz - c.z); if (d < bd && !(window.__seatTaken && window.__seatTaken(c))){ bd = d; best = c; } }
   return best; }
 function sitDown(c){ seat = c; hopY = hopV = 0; px = c.x; pz = c.z; if (c.ang !== null){ yaw = c.ang; pitch = -0.12; } }
 function standUp(){
@@ -1411,8 +1445,8 @@ document.addEventListener('mousemove', e => {
   look(e.movementX || 0, e.movementY || 0, locked ? 0.0022 : 0.004);
 });
 document.addEventListener('mouseout', e => { if (!e.relatedTarget) mouseIn = false; });
-document.addEventListener('mousedown', e => { const L = GAME.controlLock; if (L && L.press && started && !paused && e.button === 0 && (e.target === canvas || locked)) L.press(true, e.clientX, e.clientY, !locked); });
-document.addEventListener('mouseup', e => { const L = GAME.controlLock; if (L && L.press && e.button === 0) L.press(false, e.clientX, e.clientY, !locked); });
+document.addEventListener('mousedown', e => { const L = GAME.controlLock; if (L && L.press && started && !paused && (e.button === 0 || (e.button === 2 && L.rightClick)) && (e.target === canvas || locked)) L.press(true, e.clientX, e.clientY, !locked, e.button); });
+document.addEventListener('mouseup', e => { const L = GAME.controlLock; if (L && L.press && (e.button === 0 || (e.button === 2 && L.rightClick))) L.press(false, e.clientX, e.clientY, !locked, e.button); });
 
 const joy = document.getElementById('joy'), knob = document.getElementById('knob');
 let joyId = null, jx0 = 0, jy0 = 0, jvx = 0, jvy = 0, lookId = null, lx = 0, ly = 0;
@@ -1505,5 +1539,6 @@ window.dispatchEvent(new Event('game-ready'));
 <script type="module" src="toilet.js"></script>
 <script type="module" src="boards.js"></script>
 <script type="module" src="darts.js"></script>
+<script type="module" src="boxing.js"></script>
 </body>
 </html>
