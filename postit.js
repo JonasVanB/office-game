@@ -114,7 +114,7 @@ export function initPostits({G, net, me}){
     if (!inLane()) return null;
     const d = G.state.x - LINE;   // < 0: before the line
     const q = d > 0.1 ? 0 : d > 0 ? 1 - d/0.1*0.4 : Math.max(0, 1 + d/0.5);
-    if (d > 0.1) say('Foul! Over the line', '#ff6a5a'); else if (q > 0.9) say('Perfect take-off!'); else if (q > 0.6) say('Good take-off'); else if (momentum > 0.2) say('Too early', '#ffffff');
+    if (d > 0.1){ say('Foul! Over the line', '#ff6a5a'); window.__ach && window.__ach('p_foul'); } else if (q > 0.9) say('Perfect take-off!'); else if (q > 0.6) say('Good take-off'); else if (momentum > 0.2) say('Too early', '#ffffff');
     jump = {m: momentum, q, x0: G.state.x, contactAt: 0, kick: null, stuck: false, t0: performance.now()/1000};
     return 3.3 + 0.6*momentum*q;
   };
@@ -137,6 +137,8 @@ export function initPostits({G, net, me}){
     if (prev && prev.h >= h){ toast(`${fmt(h)}`, `Not higher than your best (${fmt(prev.h)}). ${how}`); play('pop', 0.3); return; }
     const e = {n: who.name, h: Math.min(MAXH, h), z: Math.max(Z0 + 0.1, Math.min(Z1 - 0.1, G.state.z)), c: COLORS[hash(who.id) % COLORS.length], t: Date.now()};
     entries.set(who.id, e); net.setPostit(who.id, e); render(); play('pop', 0.8);
+    if (window.__ach){ const A = window.__ach; A('p_first'); if (e.h >= 2.7) A('p_270'); if (e.h >= 2.9) A('p_290'); if (e.h >= 3.0) A('p_300'); if (rankOf(who.id) === 0) A('p_top');
+      if (jump && jump.q >= 0.9 && jump.kick >= 0.85) A('p_perfect'); window.__xp(10 + Math.round((e.h - MINH)*60), 'New personal best on the post-it wall'); }
     const rank = rankOf(who.id);
     toast(`📝 ${fmt(e.h)}!` + (rank === 0 ? ' 🏆' : ` · #${rank + 1}`), how);
     if (rank === 0 && window.__mpSay) window.__mpSay(`📝 stuck a post-it at ${fmt(e.h)}, the highest on the wall!`);

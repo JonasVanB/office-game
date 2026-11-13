@@ -89,6 +89,9 @@ function finish(){
   const T = Math.max(0.01, s.t); s.final = Math.round(s.score);
   s.res = {on: s.onT/T, inb: (s.onT + s.inT)/T, early: s.t < 2};
   if (s.final > best){ best = s.final; s.isBest = true; try { localStorage.setItem('office.peeBest', String(best)); } catch (e) {} }
+  // progress.js: XP and achievements
+  if (window.__ach){ window.__ach('wc_first'); window.__stat('toilet'); if (!s.res.early && s.res.on > 0.55) window.__ach('wc_sniper');
+    if (!s.res.early && s.res.on <= 0.3 && s.missT > T*0.4) window.__ach('wc_mop'); if (s.vs) window.__ach('wc_duel'); window.__xp(Math.min(30, Math.round(s.final/40)), 'Toilet visit'); }
   renderCard(); card.style.display = 'block';
 }
 function renderCard(){
@@ -98,7 +101,7 @@ function renderCard(){
   if (s.vs){
     const opp = Math.round(s.oppScore), who = esc(s.vsName || 'your colleague');
     if (!s.oppDone) duel = `<div style="margin:2px 0 8px;color:#454b55">Waiting for ${who} to finish… (${opp} so far)</div>`;
-    else { const res = score > opp ? ['🏆', 'You win!'] : score < opp ? ['🥈', `${who} wins`] : ['🤝', 'A draw'];
+    else { if (score > opp && window.__ach) window.__ach('wc_duelwin'); const res = score > opp ? ['🏆', 'You win!'] : score < opp ? ['🥈', `${who} wins`] : ['🤝', 'A draw'];
       rating = [res[0], res[1]]; duel = `<div style="margin:2px 0 8px;color:#454b55">You ${score} · ${who} ${opp}</div>`; }
   }
   card.innerHTML = `<div style="font-size:30px;line-height:1">${rating[0]}</div><h1 style="font-size:20px;margin:6px 0 6px;font-weight:600">${rating[1]}</h1>${duel}`

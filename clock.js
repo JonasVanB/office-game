@@ -357,6 +357,8 @@ function init(){
 // CLOCK.trigger('fire' | 'burglar' | 'spooky' | 'server' | 'cleaners' | 'winupdate') starts an after-hours event now (best at night: ?t=ma-22:00)
 window.CLOCK = {
   now(){ const g = gameTime(); return DAYS[g.wd] + ' ' + hhmm(g.min); }, set: setTime,
+  game: () => gameTime(),   // {dayN, wd (0 = Monday), min (minutes since midnight), A}
+  active(){ const g = gameTime(); return events(g.dayN).filter(e => e.A <= g.A && g.A < e.A + e.dur).map(e => e.kind); },   // kinds of events happening now
   play(name){ sound.unlock(); play(name, 1, 0); },
   speed(n){ const real = window.__serverNow ? window.__serverNow() : Date.now(); offset += (speedBase + (real - speedBase)*speed) - real; speedBase = real; speed = +n || 1; },
   // CLOCK.trigger('fire', 120, 1) → fire in the 4e kitchen; the third value picks the fire spot (0 Print room, 1 kitchen, 2 3e kitchen)

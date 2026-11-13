@@ -1368,7 +1368,7 @@ function blocked(x, z){ for (const c of colliders){ if ((c[4] || 0) !== mode) co
 // the door you are standing in front of (same level, within 1.6 m); E or a tap on the prompt opens / closes it
 const doorHint = document.getElementById('doorHint'); let nearDoor = null, lastHint = '';
 function findNearDoor(){ const lv = doorLevel(); let best = null, bd = 1.6; for (const d of doors){ if (d.level !== lv) continue; const dd = Math.hypot(px - d.ctr[0], pz - d.ctr[1]); if (dd < bd){ bd = dd; best = d; } } return best; }
-function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else d.target = DOOR_OPEN;
+function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else { if (GAME.canOpen && !GAME.canOpen(d)){ if (GAME.onLocked) GAME.onLocked(d); return; } d.target = DOOR_OPEN; if (window.__stat) window.__stat("doors"); }
   if (window.__onDoor) window.__onDoor(doors.indexOf(d), d.target > 0); }   // mp.js: the door opens / closes for everyone
 // jumping: Space (or the jump button on touch screens); only changes the view height, not where you can walk
 // A run-up (Shift + forward) jumps higher. Pressing jump again in the air goes to GAME.onAirJump (postit.js: wall kick, stick a post-it).
@@ -1380,15 +1380,17 @@ function hop(){
   const run = (keys.ShiftLeft || keys.ShiftRight) && (keys.KeyW || keys.ArrowUp || jvy < -0.5);
   let v = run ? 3.75 : 3.3;
   if (GAME.onTakeoff){ const o = GAME.onTakeoff(v); if (o) v = o; }
-  hopV = v;
+  hopV = v; if (window.__stat) window.__stat("jumps");
 }
 GAME.jump = hop;
 GAME.boostHop = dv => { if (hopY > 0) hopV += dv; };
 // Things you can use with E (or by tapping the prompt): modules add {tick(dt, keys) → prompt text, use() → handled?} to GAME.uses.
 // Every frame each tick runs (and may draw); the first prompt is shown. E goes to the first use() that handles it, otherwise the nearest door.
-// toilet.js and boards.js put themselves in front; darts.js and tiles.js use their own window hooks, wrapped here.
+// toilet.js and boards.js put themselves in front; darts.js and tiles.js use their own window hooks, wrapped here;
+// tickets.js (and later modules) push to window.__useHooks / window.__hintHooks, also wrapped here.
 GAME.uses = [
   {tick: (dt, k) => window.__onFrameDarts ? window.__onFrameDarts(dt, k) : '', use: () => !!(window.__onUseDarts && window.__onUseDarts())},
+  {tick: () => { for (const f of window.__hintHooks || []){ const h = f(); if (h) return h; } return ''; }, use: () => (window.__useHooks || []).some(f => f())},
   {tick: () => { const h = window.__onFrameTiles ? window.__onFrameTiles() : ''; return nearDoor ? '' : h; }, use: () => !!(window.__onUseTiles && window.__onUseTiles())},
 ];
 function useOrDoor(){ for (const u of GAME.uses) if (u.use()) return; toggleDoor(); }
@@ -1515,10 +1517,11 @@ function frame(){
   if (window.__onFrame) window.__onFrame(dt);
   if (window.__onFrameClock) window.__onFrameClock(dt);
   camera.updateMatrixWorld();
-  let useHint = ''; for (const u of GAME.uses){ const h = u.tick(dt, keys); if (h && !useHint) useHint = h; }   // toilet.js, boards.js, sitting
+  let useHint = ''; for (const u of GAME.uses){ const h = u.tick(dt, keys); if (h && !useHint) useHint = h; }   // toilet.js, boards.js, sitting, darts, tickets, tiles
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
-  const ht = useHint ? useHint : GAME.controlLock ? '' : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
+  const lockMsg = nearDoor && nearDoor.target <= 0 && GAME.lockText ? GAME.lockText(nearDoor) : '';   // not 'locked': that name is the pointer lock
+  const ht = useHint ? useHint : GAME.controlLock ? '' : lockMsg ? lockMsg : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
   if (ht !== lastHint){ lastHint = ht; doorHint.textContent = ht; doorHint.style.display = ht ? 'block' : 'none'; }
   const zn = zoneName(px, pz); if (zn !== lastZone){ zoneEl.textContent = zn; lastZone = zn; }
   renderer.render(scene, camera); drawMap();

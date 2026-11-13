@@ -126,7 +126,7 @@ export function createFX(G, announce){
       const o = gh.obj; if (ks <= 0){ o.visible = false; continue; }
       const p = ghostPos(gh, t); let x = p.x, z = p.z, y = p.y, scale = 1, op = 1;
       const d = Math.hypot(x - st.x, z - st.z), same = myLv === gh.lv;
-      if (same && d < 2.2 && nowS > gh.hideUntil && nowS - gh.booAt > 1.4){ gh.booAt = nowS; const s = spatial(x, z, gh.lv, 6); play('boo', Math.max(0.6, s.g), s.p); }
+      if (same && d < 2.2 && nowS > gh.hideUntil && nowS - gh.booAt > 1.4){ gh.booAt = nowS; const s = spatial(x, z, gh.lv, 6); play('boo', Math.max(0.6, s.g), s.p); if (window.__ach){ window.__ach('n_boo'); window.__stat('boo'); } }
       const sinceBoo = nowS - gh.booAt;
       if (sinceBoo < 1.4){   // rushes at you, grows, then vanishes
         const k = smooth(0, 0.5, sinceBoo), fx = -Math.sin(st.yaw), fz = -Math.cos(st.yaw);
@@ -164,7 +164,7 @@ export function createFX(G, announce){
       const near = myLv === sp.lv ? Math.hypot(st.x - sp.x, st.z - sp.z) : 40;
       fogCol = SMOKEFOG; fogNear = 0.5; fogFar = fogFar + (Math.min(60, 7 + near*0.9) - fogFar)*kf;
       const s = spatial(sp.x, sp.z, sp.lv, 16); loop('crackle', s.g*0.5*kf, s.p);
-      if (fireSaid !== fire.A && myLv === sp.lv && near < 6){ fireSaid = fire.A; announce && announce('🥵', "It's getting really hot here. Get out!", 'Take the stairs, not the lifts', true); }
+      if (fireSaid !== fire.A && myLv === sp.lv && near < 6){ fireSaid = fire.A; window.__ach && window.__ach('n_hot'); announce && announce('🥵', "It's getting really hot here. Get out!", 'Take the stairs, not the lifts', true); }
     } else { fireG.visible = false; for (const p of smoke) p.s.visible = false; loop('crackle', 0); }
     if (ks > 0 && !fogCol){ fogCol = SPOOKFOG; fogNear = 1; fogFar = fogFar + (18 - fogFar)*ks; }
     if (fog){ fog.near = fogNear; fog.far = fogFar; if (fogCol){ tmpC.copy(fog.color).lerp(fogCol, Math.max(kf, ks)); fog.color.copy(tmpC); scene.background.copy(tmpC); } }
@@ -190,7 +190,7 @@ export function createFX(G, announce){
       let bx = x, bz = 6.5 + (x < 13 ? 3.8*Math.sin(x*0.45) : x > 36 ? 1.0*Math.sin(x*0.8) : 0), fdx = dir, fdz = 0, running = false;
       const d = Math.hypot(bx - st.x, bz - st.z);
       if (!fled.at && myLv === 0 && d < 4.5){ fled.at = nowS; fled.x = bx; fled.z = bz; const k = Math.max(d, 0.1); fled.dx = (bx - st.x)/k; fled.dz = (bz - st.z)/k;
-        const s = spatial(bx, bz, 0, 12); play('run', Math.max(0.5, s.g), s.p); announce && announce('🏃', 'The burglar spotted you and ran off!', 'He dropped something… the Friday fries money?', false); }
+        const s = spatial(bx, bz, 0, 12); play('run', Math.max(0.5, s.g), s.p); announce && announce('🏃', 'The burglar spotted you and ran off!', 'He dropped something… the Friday fries money?', false); window.__ach && window.__ach('n_burglar'); }
       if (fled.at){ const r = nowS - fled.at; if (r > 3){ fled.gone = true; } bx = fled.x + fled.dx*4.8*r; bz = fled.z + fled.dz*4.8*r; fdx = fled.dx; fdz = fled.dz; running = true; }
       burglar.visible = !fled.gone; burglar.position.set(bx, 0, bz); burglar.rotation.y = face(fdx, fdz);
       animateAvatar(burglar, dt*(running ? 14 : 6), running ? 1.3 : 0.7);
@@ -205,6 +205,7 @@ export function createFX(G, announce){
       animateAvatar(cleaner, dt*4, 0.5);
       cart.visible = true; cart.position.set(p.x + 0.4, y, p.z + (p.z > 6.5 ? -2.2 : 2.2));
       const s = spatial(x, z, p.lv, 18); loop('vacuum', s.g*0.2*kc, s.p);
+      if (st.lv === p.lv && Math.hypot(st.x - x, st.z - z) < 2.5 && window.__ach) window.__ach('n_cleaner');
     } else { cleaner.visible = cart.visible = false; loop('vacuum', 0); }
   }};
 }
