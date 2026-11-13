@@ -9,6 +9,7 @@ import {cleanAvatar, defaultAvatar, buildAvatar, animateAvatar, makeNameTag} fro
 import {openCreator, avatarPicture} from './creator.js';
 import {play, spatial} from './sound.js';
 import {initPostits} from './postit.js';
+import {initTiles} from './tiles.js';
 
 const CFG = window.OFFICE_CONFIG || {};
 const MSAL_URL = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/+esm';
@@ -85,6 +86,11 @@ async function firebaseNet(){
     // postits/<user id> = {n, h, z, c, t}: everyone's best post-it on the high-jump wall
     setPostit(id, d){ D.set(D.ref(db, 'postits/' + id), d).catch(e => console.warn('post-it not saved:', e.message)); },
     removePostit(id){ D.remove(D.ref(db, 'postits/' + id)).catch(() => {}); },
+    // tiles/<panel>_<col>_<row> = {q, n, by, t}: quotes on the tile wall at desk 6
+    setTile(k, d){ D.set(D.ref(db, 'tiles/' + k), d).catch(e => console.warn('tile not saved:', e.message)); },
+    removeTile(k){ D.remove(D.ref(db, 'tiles/' + k)).catch(() => {}); },
+    onTiles(cb){ const p = D.ref(db, 'tiles');
+      D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('tiles not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
     onPostits(cb){ const p = D.ref(db, 'postits');
       D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('post-its not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
   };
@@ -94,9 +100,13 @@ function localNet(){
   const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, postitCb = () => {}, mine = null;
   const localPostits = () => { try { return JSON.parse(localStorage.getItem('office.localPostits')) || {}; } catch (e){ return {}; } };
   const savePostits = all => { try { localStorage.setItem('office.localPostits', JSON.stringify(all)); } catch (e){} };
+  let tileCb = () => {};
+  const localTiles = () => { try { return JSON.parse(localStorage.getItem('office.localTiles')) || {}; } catch (e){ return {}; } };
+  const saveTiles = all => { try { localStorage.setItem('office.localTiles', JSON.stringify(all)); } catch (e){} };
   bc.onmessage = e => { const {type, key, data} = e.data || {}; if (!key || key === myKey) return;
     if (type === 'door') return doorCb(e.data.i, e.data.o);
     if (type === 'postit') return postitCb(e.data.id, e.data.d);
+    if (type === 'tile') return tileCb(e.data.id, e.data.d);
     if (type === 'hello'){ if (mine) bc.postMessage({type: 'state', key: myKey, data: mine}); return; }
     if (type === 'bye') return cb('remove', key);
     if (type === 'state') cb('change', key, data); };
@@ -115,6 +125,9 @@ function localNet(){
     setPostit(id, d){ const all = localPostits(); all[id] = d; savePostits(all); bc.postMessage({type: 'postit', key: myKey, id, d}); },
     removePostit(id){ const all = localPostits(); delete all[id]; savePostits(all); bc.postMessage({type: 'postit', key: myKey, id, d: null}); },
     onPostits(f){ postitCb = f; const all = localPostits(); for (const id in all) f(id, all[id]); },
+    setTile(id, d){ const all = localTiles(); all[id] = d; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d}); },
+    removeTile(id){ const all = localTiles(); delete all[id]; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d: null}); },
+    onTiles(f){ tileCb = f; const all = localTiles(); for (const id in all) f(id, all[id]); },
   };
 }
 
@@ -325,7 +338,10 @@ async function main(){
   subscribedAt = performance.now(); net.subscribe(onPresence);
   net.onDoors(applyDoor);
   window.__onDoor = (i, open) => { if (i >= 0) net.setDoor(i, open); };
-  postits = initPostits({G, net, me: () => joined && user && profile ? {id: user.id, name: profile.name} : null});
+  window.__mpSay = text => sendChat(text);   // minigames (darts) brag in the chat: "Jonas: 🎯 threw 180 at darts!"
+  const me = () => joined && user && profile ? {id: user.id, name: profile.name} : null;
+  postits = initPostits({G, net, me});
+  initTiles({G, net, me});
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
 
   ui.login.querySelector('span').textContent = LOCAL ? 'Sign in (local test)' : 'Sign in with Microsoft';

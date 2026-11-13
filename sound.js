@@ -99,6 +99,15 @@ const FX = {
   cackle(v, pan){ talk(v, pan, 7, true, 90); },
   // someone running away
   run(v, pan){ const d = out(pan); let t = ctx.currentTime; for (let i = 0; i < 10; i++){ const g = ctx.createGain(); g.connect(d); env(g, t, 0.003, 0.02, 0.08, 0.35*v*(1 - i/12)); noise(g, t, 0.15, 'lowpass', 700); t += 0.27; } },
+  // darts: a dart whooshing off the hand, and the thud when it hits (board or wall)
+  whoosh(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.03, 0.05, 0.12, 0.12*v); const n = noise(g, t, 0.25, 'bandpass', 1800, 1.5); n.f.frequency.setValueAtTime(2600, t); n.f.frequency.exponentialRampToValueAtTime(900, t + 0.2); },
+  thud(v, pan, wall){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.02, 0.12, 0.5*v); noise(g, t, 0.15, 'lowpass', wall ? 900 : 1600);
+    tone(d, t, 0.12, wall ? 140 : 220, 'sine', 0.25*v); },
+  // bust: a low double buzz
+  buzz(v, pan){ const d = out(pan), t = ctx.currentTime; for (const o of [0, 0.22]) tone(d, t + o, 0.18, 110, 'square', 0.08*v, 0.01); },
+  // crowd cheer: lots of voices and a noisy swell (180, a checkout)
+  cheer(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.25, 1.2, 1.2, 0.3*v); noise(g, t, 2.8, 'bandpass', 1100, 0.6);
+    for (let i = 0; i < 6; i++) setTimeout(() => { try { talk(0.6*v, pan + (Math.random() - 0.5)*0.6, 3 + (Math.random()*4 | 0), Math.random() < 0.6, 160 + Math.random()*120); } catch (e) {} }, i*120); },
   // a soft "pop" when a chat message appears
   pop(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 0.12, 600, 'sine', 0.12*v); o.frequency.exponentialRampToValueAtTime(1100, t + 0.08); },
   // toilet flush: a rush of water that rises, then refill hiss

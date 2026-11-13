@@ -1,6 +1,6 @@
 // Post-it high jump: on the wall above the emergency door in the Stille ruimte (x = 50).
-// Jump (Space) and press Space again in the air: your post-it sticks as high as your hand reaches at that moment.
-// A run-up (Shift + forward) gives a higher jump. Every player keeps their best post-it; only the 25 highest stay on the wall.
+// A skill jump: sprint along the lane, take off at the yellow line, kick off the wall, and press Space at the very top:
+// your post-it sticks where your hand reaches. Every player keeps their best post-it; only the 25 highest stay on the wall.
 import {play} from './sound.js';
 
 const WALLX = 49.955;               // just in front of the end wall
@@ -89,35 +89,79 @@ export function initPostits({G, net, me}){
     if (!renderQueued){ renderQueued = true; setTimeout(() => { renderQueued = false; render(); }, 50); }
   });
 
-  // ---------- jumping and sticking ----------
-  const inZone = () => { const s = G.state; return s.lv === 0 && s.y < 1.2 && s.x > 48.4 && s.z > Z0 - 0.6 && s.z < Z1 + 0.1; };
-  let lastStick = 0, stuckThisJump = false;
-  G.onAirJump = hopY => {
-    if (!inZone() || stuckThisJump || performance.now() - lastStick < 800) return;
-    stuckThisJump = true; lastStick = performance.now();
-    const h = Math.round((REACH + hopY)*100)/100, who = me();
+
+  // ---------- the skill jump ----------
+  // 1. Run-up: sprint (Shift + W) along the lane towards the wall; the momentum bar fills.
+  // 2. Take-off: jump as close as possible to the yellow line (x = LINE). Too early loses height, over the line is a foul.
+  // 3. Wall kick: you hit the wall while still rising; press Space right then to push off the wall for extra height.
+  // 4. Stick: press Space at the very top. Only a perfect run gets close to the top of the wall (~3.0 m).
+  const LINE = 49.0, LANE = {x0: 43, z0: 5.6, z1: 7.4};
+  const floorMat = c => new THREE.MeshBasicMaterial({color: c, polygonOffset: true, polygonOffsetFactor: -2});
+  { const line = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.9), floorMat(0xf2c230)); line.rotation.x = -Math.PI/2; line.position.set(LINE, 0.015, 6.5); wall.add(line);
+    for (let x = LANE.x0 + 1; x < LINE - 0.5; x += 1){ const t = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.25), floorMat(0xd9d7d1)); t.rotation.x = -Math.PI/2; t.position.set(x, 0.014, 6.5); wall.add(t); } }
+  const meter = document.createElement('div'); meter.style.cssText = 'position:fixed;left:50%;bottom:calc(22% + 64px);transform:translateX(-50%);width:220px;display:none;z-index:2;pointer-events:none;color:#fff;font-size:12px;text-align:center';
+  meter.innerHTML = '<div style="margin-bottom:3px;text-shadow:0 1px 2px #000">Run-up</div><div style="height:10px;border-radius:5px;background:rgba(20,24,30,.6);overflow:hidden"><b style="display:block;height:100%;width:0;background:linear-gradient(90deg,#f2c230,#ff6a2a);border-radius:5px"></b></div>';
+  document.body.appendChild(meter); const meterBar = meter.querySelector('b');
+  const flash = document.createElement('div'); flash.style.cssText = 'position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);font:800 34px system-ui,Segoe UI,sans-serif;color:#ffe866;text-shadow:0 2px 6px rgba(0,0,0,.7);opacity:0;transition:opacity .15s;pointer-events:none;z-index:3;white-space:nowrap';
+  document.body.appendChild(flash); let flashT = 0;
+  const say = (t, col) => { flash.textContent = t; flash.style.color = col || '#ffe866'; flash.style.opacity = 1; clearTimeout(flashT); flashT = setTimeout(() => flash.style.opacity = 0, 900); };
+
+  const inLane = () => { const s = G.state; return s.lv === 0 && s.y < 1.3 && s.x > LANE.x0 && s.z > LANE.z0 && s.z < LANE.z1; };
+  const inZone = () => { const s = G.state; return s.lv === 0 && s.y < 1.3 && s.x > 48.4 && s.z > Z0 - 0.6 && s.z < Z1 + 0.1; };
+  let momentum = 0, prevX = null, prevT = 0, jump = null, lastStick = 0;
+
+  G.onTakeoff = v => {
+    if (!inLane()) return null;
+    const d = G.state.x - LINE;   // < 0: before the line
+    const q = d > 0.1 ? 0 : d > 0 ? 1 - d/0.1*0.4 : Math.max(0, 1 + d/0.5);
+    if (d > 0.1) say('Foul! Over the line', '#ff6a5a'); else if (q > 0.9) say('Perfect take-off!'); else if (q > 0.6) say('Good take-off'); else if (momentum > 0.2) say('Too early', '#ffffff');
+    jump = {m: momentum, q, x0: G.state.x, contactAt: 0, kick: null, stuck: false, t0: performance.now()/1000};
+    return 3.3 + 0.6*momentum*q;
+  };
+  G.onAirJump = (hopY) => {
+    const now = performance.now()/1000;
+    // wall kick: the first press just after you hit the wall
+    if (jump && jump.contactAt && jump.kick === null && now - jump.contactAt < 0.35){
+      const k = Math.max(0, 1 - Math.abs(now - jump.contactAt - 0.05)/0.25); jump.kick = k; G.boostHop(0.6*k);
+      play('thud', 0.6, 0, true); say(k > 0.85 ? 'Perfect wall kick!' : k > 0.4 ? 'Wall kick!' : 'Late kick', k > 0.4 ? '#ffe866' : '#ffffff'); return;
+    }
+    if (!inZone() || (jump && jump.stuck) || performance.now() - lastStick < 800) return;
+    if (jump) jump.stuck = true; lastStick = performance.now();
+    stick(Math.round((REACH + hopY)*100)/100);
+  };
+  function stick(h){
+    const who = me(), how = jump ? `Run-up ${Math.round(jump.m*100)}% · take-off ${Math.round(jump.q*100)}% · wall kick ${jump.kick === null ? '–' : Math.round(jump.kick*100) + '%'}` : '';
     if (!who){ toast('Sign in to stick a post-it'); return; }
-    if (h < MINH){ toast(`${fmt(h)}: too low`, 'Press Space again right at the top of your jump. A run-up (Shift) helps'); play('pop', 0.3); return; }
+    if (h < MINH){ toast(`${fmt(h)}: too low`, how || 'Sprint at the wall, jump at the yellow line, kick off the wall, stick at the top'); play('pop', 0.3); return; }
     const prev = entries.get(who.id);
-    if (prev && prev.h >= h){ toast(`${fmt(h)}`, `Not higher than your best (${fmt(prev.h)}). Try again!`); play('pop', 0.3); return; }
+    if (prev && prev.h >= h){ toast(`${fmt(h)}`, `Not higher than your best (${fmt(prev.h)}). ${how}`); play('pop', 0.3); return; }
     const e = {n: who.name, h: Math.min(MAXH, h), z: Math.max(Z0 + 0.1, Math.min(Z1 - 0.1, G.state.z)), c: COLORS[hash(who.id) % COLORS.length], t: Date.now()};
     entries.set(who.id, e); net.setPostit(who.id, e); render(); play('pop', 0.8);
     const rank = rankOf(who.id);
-    toast(`📝 ${fmt(e.h)}!`, rank === 0 ? 'The highest post-it on the wall! 🏆' : `You're #${rank + 1} on the wall` + (rank >= TOP ? ', not in the top 25 yet' : ''));
-    // only the 25 highest stay
-    ranked().slice(TOP).forEach(([id]) => { entries.delete(id); net.removePostit(id); });
-  };
+    toast(`📝 ${fmt(e.h)}!` + (rank === 0 ? ' 🏆' : ` · #${rank + 1}`), how);
+    if (rank === 0 && window.__mpSay) window.__mpSay(`📝 stuck a post-it at ${fmt(e.h)}, the highest on the wall!`);
+    ranked().slice(TOP).forEach(([id]) => { entries.delete(id); net.removePostit(id); });   // only the 25 highest stay
+  }
 
   let hintKey = '';
   return {update(){
-    if (G.state.hop === 0) stuckThisJump = false;
-    const z = inZone(), who = me(), best = who && entries.get(who.id);
+    const s = G.state, now = performance.now()/1000, dt = prevT ? Math.min(0.1, now - prevT) : 0; prevT = now;
+    // momentum builds while you sprint towards the wall in the lane, and fades when you slow down
+    const vx = prevX !== null && dt > 0 ? (s.x - prevX)/dt : 0; prevX = s.x;
+    if (s.hop > 0){ /* keep it in the air */ } else if (inLane() && vx > 3.4) momentum = Math.min(1, momentum + dt/1.1); else momentum = Math.max(0, momentum - dt*2.5);
+    if (s.hop === 0 && jump && now - jump.t0 > 0.15) jump = null;   // landed
+    // hitting the wall while rising: the moment to kick
+    if (jump && !jump.contactAt && s.hop > 0 && jump.x0 < 49.45 && s.x > 49.55){ jump.contactAt = now; say('KICK!', '#ffffff'); }
+    const lane = inLane() && s.x < 49.9;
+    meter.style.display = lane && (momentum > 0.02 || s.x > 46) ? 'block' : 'none'; meterBar.style.width = (momentum*100).toFixed(0) + '%';
+    const z = inZone() || (inLane() && s.x > 46), who = me(), best = who && entries.get(who.id);
     const key = z ? (best ? best.h + '|' + rankOf(who.id) : '-') : '';
     if (key === hintKey) return; hintKey = key;
     if (!z){ hint.style.display = 'none'; return; }
-    hint.innerHTML = window.__isTouch ? '📝 <b>Post-it high jump</b>: tap ⤒ to jump, tap again at the top to stick your post-it'
-                                      : '📝 <b>Post-it high jump</b>: Space to jump, Space again at the top to stick your post-it. Shift + W for a run-up';
-    if (best){ const s = document.createElement('div'); s.textContent = `Your best: ${fmt(best.h)} (#${rankOf(who.id) + 1})`; hint.append(s); }
+    hint.innerHTML = window.__isTouch
+      ? '📝 <b>Post-it high jump</b>: run at the wall, tap ⤒ at the yellow line, tap again when you hit the wall, and again at the top to stick'
+      : '📝 <b>Post-it high jump</b>: sprint at the wall (Shift + W), jump at the yellow line (Space), Space when you hit the wall to kick off it, Space at the top to stick';
+    if (best){ const d = document.createElement('div'); d.textContent = `Your best: ${fmt(best.h)} (#${rankOf(who.id) + 1})`; hint.append(d); }
     hint.style.display = 'block';
   }};
 }

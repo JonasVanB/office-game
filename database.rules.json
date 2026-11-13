@@ -21,6 +21,13 @@
         ".validate": "newData.hasChildren(['n', 'h', 'z']) && newData.child('n').isString() && newData.child('n').val().length <= 20 && newData.child('h').isNumber() && newData.child('h').val() >= 2 && newData.child('h').val() <= 3.2 && newData.child('z').isNumber()"
       }
     },
+    "tiles": {
+      ".read": true,
+      "$k": {
+        ".write": "$k.length <= 8",
+        ".validate": "newData.hasChildren(['q', 'n']) && newData.child('q').isString() && newData.child('q').val().length <= 70 && newData.child('n').isString() && newData.child('n').val().length <= 20"
+      }
+    },
     "doors": {
       ".read": true,
       "$i": {
