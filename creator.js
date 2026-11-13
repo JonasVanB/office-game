@@ -30,16 +30,16 @@ const CSS = `
 let styled = false;
 
 // Opens the creator. Resolves with {name, avatar} on save, or null on cancel.
-export function openCreator(THREE, {name = '', avatar, title = 'Create your character', canCancel = false} = {}){
+export function openCreator(THREE, {name = '', avatar, title = 'Create your character', canCancel = false, sweater = false} = {}){   // sweater: the Orbid sweater is unlocked
   if (!styled){ const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st); styled = true; }
-  let av = cleanAvatar(avatar);
+  let av = cleanAvatar(avatar); if (!sweater) av.sweater = false;
   const wrap = document.createElement('div'); wrap.id = 'creator';
   wrap.innerHTML = `<div class="cr" role="dialog" aria-modal="true" aria-label="${title}">
     <div class="pv"><canvas></canvas><span>Drag to turn</span></div>
     <div class="ctl">
       <h1>${title}</h1><p class="sub">Everyone has the same body; pick your colours, hair and facial hair.</p>
       <label class="h" for="crName">Name</label><input type="text" id="crName" maxlength="20" autocomplete="nickname">
-      <div data-k="skin"></div><div data-k="shirt"></div><div data-k="pants"></div>
+      <div data-k="skin"></div><div data-k="sweater"></div><div data-k="shirt"></div><div data-k="pants"></div>
       <div data-k="hair"></div><div data-k="hairColor"></div><div data-k="facial"></div><div data-k="facialColor"></div>
       <p class="err"></p>
       <div class="act">${canCancel ? '<button class="cancel" type="button">Cancel</button>' : ''}<button class="save" type="button">Save character</button></div>
@@ -47,7 +47,7 @@ export function openCreator(THREE, {name = '', avatar, title = 'Create your char
   document.body.appendChild(wrap);
   const nameIn = wrap.querySelector('#crName'); nameIn.value = name;
 
-  const LABELS = {skin: 'Face colour', shirt: 'Shirt colour', pants: 'Pants colour', hair: 'Hair', hairColor: 'Hair colour', facial: 'Facial hair', facialColor: 'Facial hair colour'};
+  const LABELS = {sweater: 'Top', skin: 'Face colour', shirt: 'Shirt colour', pants: 'Pants colour', hair: 'Hair', hairColor: 'Hair colour', facial: 'Facial hair', facialColor: 'Facial hair colour'};
   const rows = {};
   function swatches(k, list){
     const el = wrap.querySelector(`[data-k="${k}"]`);
@@ -62,11 +62,12 @@ export function openCreator(THREE, {name = '', avatar, title = 'Create your char
     el.innerHTML = `<label class="h">${LABELS[k]}</label><div class="ch"></div>`;
     const ch = el.querySelector('.ch');
     for (const [v, l] of list){ const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.dataset.v = v; b.onclick = () => set(k, v); ch.appendChild(b); }
-    rows[k] = () => { for (const b of ch.querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === av[k]); };
+    rows[k] = () => { for (const b of ch.querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === String(av[k])); };
   }
   swatches('skin', OPTIONS.skin); swatches('shirt', OPTIONS.shirt); swatches('pants', OPTIONS.pants);
   choices('hair', OPTIONS.hair); swatches('hairColor', OPTIONS.hairColor);
   choices('facial', OPTIONS.facial); swatches('facialColor', OPTIONS.hairColor);
+  if (sweater) choices('sweater', [['false', 'Shirt'], ['true', '🧥 Orbid sweater']]);
   const fcRow = wrap.querySelector('[data-k="facialColor"]');
 
   // 3D preview
@@ -86,7 +87,7 @@ export function openCreator(THREE, {name = '', avatar, title = 'Create your char
   addEventListener('resize', size);
   function loop(){ if (!alive) return; if (!dragging && (idle += 1) > 90) turn += 0.008; if (model){ model.rotation.y = turn; animateAvatar(model, 0.05, 0.25); } renderer.render(scene, cam); requestAnimationFrame(loop); }
 
-  function set(k, v){ av[k] = v; rows[k](); fcRow.style.display = av.facial === 'none' ? 'none' : ''; rebuild(); }
+  function set(k, v){ if (k === 'sweater') v = v === 'true'; av[k] = v; const sr = wrap.querySelector('[data-k="shirt"]'); if (sr) sr.style.opacity = av.sweater ? 0.35 : 1; rows[k](); fcRow.style.display = av.facial === 'none' ? 'none' : ''; rebuild(); }
   for (const k in rows) rows[k](); fcRow.style.display = av.facial === 'none' ? 'none' : '';
   rebuild(); size(); loop();
   setTimeout(() => { if (!nameIn.value) nameIn.focus(); }, 50);

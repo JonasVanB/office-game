@@ -110,6 +110,10 @@ const FX = {
   // crowd cheer: lots of voices and a noisy swell (180, a checkout)
   cheer(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.25, 1.2, 1.2, 0.3*v); noise(g, t, 2.8, 'bandpass', 1100, 0.6);
     for (let i = 0; i < 6; i++) setTimeout(() => { try { talk(0.6*v, pan + (Math.random() - 0.5)*0.6, 3 + (Math.random()*4 | 0), Math.random() < 0.6, 160 + Math.random()*120); } catch (e) {} }, i*120); },
+  // stiekem kussen: a quick smooch, and the suspicious colleague clearing their throat
+  smooch(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.005, 0.03, 0.06, 0.25*v); noise(g, t, 0.12, "bandpass", 2600, 4);
+    const o = tone(d, t + 0.02, 0.09, 900, "sine", 0.12*v); o.frequency.exponentialRampToValueAtTime(1700, t + 0.09); },
+  cough(v, pan){ const d = out(pan); let t = ctx.currentTime; for (let i = 0; i < 2; i++){ const g = ctx.createGain(); g.connect(d); env(g, t, 0.01, 0.06, 0.12, 0.35*v); noise(g, t, 0.25, "bandpass", 700 - i*120, 1.5); t += 0.28; } },
   // a soft "pop" when a chat message appears
   pop(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 0.12, 600, 'sine', 0.12*v); o.frequency.exponentialRampToValueAtTime(1100, t + 0.08); },
   // toilet flush: a rush of water that rises, then refill hiss

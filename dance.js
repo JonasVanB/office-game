@@ -312,7 +312,7 @@ function judgeTime(){
   if (f.failed) return;
   if (f.life <= 0){ f.failed = true; f.life = 0; say('Failed! Keep watching, the others are still going'); }
 }
-function miss(j){ const f = me; f.counts[j]++; f.combo = 0; f.life = Math.max(0, f.life + LIFE[j]*(f.d === 0 ? 0.6 : 1));   // Easy forgives a little more f.last = {j, e: 0, at: performance.now()}; f.jc++; }
+function miss(j){ const f = me; f.counts[j]++; f.combo = 0; f.life = Math.max(0, f.life + LIFE[j]*(f.d === 0 ? 0.6 : 1)); f.last = {j, e: 0, at: performance.now()}; f.jc++; }   // Easy forgives a little more
 function toLobby(){ if (!me) return; Object.assign(me, {ph: 'lobby', notes: null, result: null}); renderLobby(); }
 
 // ---------- per frame ----------

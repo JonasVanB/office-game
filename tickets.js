@@ -53,7 +53,8 @@ export function initTickets({G, prog, me}){
   let day = null, list = [], work = null, carrying = null, lastA = null, trackKey = '';
 
   const game = () => window.CLOCK && window.CLOCK.game ? window.CLOCK.game() : null;
-  const state = () => { const P = prog.P; return P.tk && P.tk.day === day ? P.tk : (P.tk = {day, done: {}, got: {}}); };
+  // today's ticket state. Firebase drops empty objects, so a saved {day, done: {}, got: {}} comes back as just {day}: fill the gaps
+  const state = () => { const P = prog.P; const tk = P.tk && P.tk.day === day ? P.tk : (P.tk = {day}); tk.done = tk.done || {}; tk.got = tk.got || {}; return tk; };
   const open = g => list.filter(t => g.min >= t.at && !state().done[t.id]);
   const late = (t, g) => g.min > t.due;
   const canDo = t => !t.lv || prog.level() >= t.lv;

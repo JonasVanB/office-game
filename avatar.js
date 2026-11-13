@@ -15,13 +15,30 @@ export function defaultAvatar(){
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
+// The Orbid sweater (avatar.sweater = true): an unlockable "shirt", grey with the Orbid logo on the left chest (progress.js unlocks it)
+export const SWEATER = '#9a9da2';
+let logoTex = null;
+export function logoTexture(THREE){
+  if (logoTex) return logoTex;
+  const c = document.createElement('canvas'); c.width = 384; c.height = 128; logoTex = new THREE.CanvasTexture(c); logoTex.encoding = THREE.sRGBEncoding; logoTex.anisotropy = 4;
+  const img = new Image();
+  img.onload = () => {
+    // the logo mark only (no "A RICOH Company" line), white background made transparent so the grey shows through
+    const g = c.getContext('2d'); g.drawImage(img, 60, 90, 1800, 610, 0, 0, c.width, c.height);
+    const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
+    for (let i = 0; i < p.length; i += 4){ const w = Math.min(p[i], p[i+1], p[i+2]); if (w > 200) p[i+3] = Math.max(0, 255 - (w - 200)*4.6); }
+    g.putImageData(d, 0, 0); logoTex.needsUpdate = true;
+  };
+  img.src = 'orbid-logo.png';
+  return logoTex;
+}
 // Make any stored or received avatar safe to build: unknown values fall back to the default.
 export function cleanAvatar(a){
   const d = defaultAvatar(), o = Object.assign({}, d, a || {});
   for (const k of ['skin', 'shirt', 'pants', 'hairColor', 'facialColor']) if (!HEX.test(o[k] || '')) o[k] = d[k];
   if (!OPTIONS.hair.some(h => h[0] === o.hair)) o.hair = d.hair;
   if (!OPTIONS.facial.some(f => f[0] === o.facial)) o.facial = d.facial;
-  return {skin: o.skin, shirt: o.shirt, pants: o.pants, hair: o.hair, hairColor: o.hairColor, facial: o.facial, facialColor: o.facialColor};
+  return {skin: o.skin, shirt: o.shirt, pants: o.pants, hair: o.hair, hairColor: o.hairColor, facial: o.facial, facialColor: o.facialColor, sweater: o.sweater === true};
 }
 
 const geo = new Map();
@@ -36,7 +53,7 @@ export function buildAvatar(THREE, avatar){
   const a = cleanAvatar(avatar), G = boxGeo(THREE);
   // colours are picked as sRGB swatches; the renderer outputs sRGB, so convert to linear to match the swatch
   const m = (c, o) => new THREE.MeshStandardMaterial(Object.assign({color: new THREE.Color(c).convertSRGBToLinear(), roughness: 0.8}, o || {}));
-  const SKIN = m(a.skin), SHIRT = m(a.shirt), PANTS = m(a.pants), SHOE = m(0x2a2a2e), HAIR = m(a.hairColor, {roughness: 0.95});
+  const SKIN = m(a.skin), SHIRT = m(a.sweater ? SWEATER : a.shirt, a.sweater ? {roughness: 1} : undefined), PANTS = m(a.pants), SHOE = m(0x2a2a2e), HAIR = m(a.hairColor, {roughness: 0.95});
   const FACIAL = a.facial === 'stubble' ? m(a.facialColor, {transparent: true, opacity: 0.45, roughness: 1}) : m(a.facialColor, {roughness: 0.95});
   const DARK = m(0x1c1c20), MOUTH = m(shade(a.skin, 0.62)), NOSE = m(shade(a.skin, 0.93));
   const box = (parent, w, h, d, x, y, z, mat) => { const me = new THREE.Mesh(G, mat); me.scale.set(w, h, d); me.position.set(x, y, z); parent.add(me); return me; };
@@ -95,6 +112,12 @@ export function buildAvatar(THREE, avatar){
     case 'fullbeard': F(0.3, 0.16, 0.06, 0, -0.17, -0.15); jaw(-0.2); moustache(); break;
   }
 
+  // the Orbid sweater: grey, darker ribbed cuffs and hem, the logo on the left chest (the avatar's left is -x, the front is -z)
+  if (a.sweater){ const RIB = m('#7b7e83', {roughness: 1});
+    box(body, 0.51, 0.06, 0.27, 0, 0.93, 0, RIB);
+    for (const arm of [armL, armR]) box(arm, 0.135, 0.05, 0.155, 0, -0.5, 0, RIB);
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.05), new THREE.MeshStandardMaterial({map: logoTexture(THREE), transparent: true, roughness: 0.9}));
+    logo.position.set(-0.12, 1.36, -0.1315); logo.rotation.y = Math.PI; body.add(logo); }
   root.userData.limbs = {legL, legR, armL, armR};
   root.userData.phase = 0;
   return root;
