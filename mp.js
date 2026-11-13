@@ -336,7 +336,7 @@ async function showProfile(){
 
 async function editCharacter(first){
   const THREE = await whenThree();
-  const res = await openCreator(THREE, {name: profile ? profile.name : (user.name || ''), avatar: profile ? profile.avatar : defaultAvatar(), title: first ? 'Create your character' : 'Edit your character', canCancel: !first});
+  const res = await openCreator(THREE, {name: profile ? profile.name : (user.name || ''), avatar: profile ? profile.avatar : defaultAvatar(), title: first ? 'Create your character' : 'Edit your character', canCancel: !first, sweater: !!(window.__hasSweater && window.__hasSweater())});
   if (!res) return;
   profile = res;
   try { localStorage.setItem('office.profile.' + user.id, JSON.stringify(profile)); } catch (e){}
@@ -368,6 +368,14 @@ async function main(){
   subscribedAt = performance.now(); net.subscribe(onPresence);
   net.onDoors(applyDoor);
   window.__onDoor = (i, open) => { if (i >= 0) net.setDoor(i, open); };
+  // the Orbid sweater (progress.js unlocks it): toggle it on your saved character; others see it through your presence data
+  window.__wearingSweater = () => !!(profile && profile.avatar && profile.avatar.sweater);
+  window.__setSweater = on => {
+    if (!profile || !user || !(window.__hasSweater && window.__hasSweater())) return false;
+    on = on === undefined ? !window.__wearingSweater() : !!on; profile = {name: profile.name, avatar: cleanAvatar(Object.assign({}, profile.avatar, {sweater: on}))};
+    try { localStorage.setItem('office.profile.' + user.id, JSON.stringify(profile)); } catch (e){}
+    net.saveProfile(user.id, profile).catch(() => {}); if (joined) net.send({a: profile.avatar}); showProfile(); return on;
+  };
   window.__mpSay = text => sendChat(text);   // minigames (darts) brag in the chat: "Jonas: 🎯 threw 180 at darts!"
   const me = () => joined && user && profile ? {id: user.id, name: profile.name} : null;
   postits = initPostits({G, net, me});

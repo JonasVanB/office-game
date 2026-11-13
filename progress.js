@@ -108,6 +108,10 @@ export const ACHIEVEMENTS = [
     ['b_flawless', '🛡️', 'Flawless', 'Win without taking any damage', 80],
     ['b_wins', '🥇', 'Undisputed', 'Win 10 fights', 60, {stat: 'boxWins', n: 10}],
   ]),
+  ...A('Secrets', [
+    ['sweater_found', '🧥', 'The Orbid sweater', 'Find the hidden Orbid sweater', 100, {secret: true}],
+    ['sweater_lv', '👔', 'Dressed for success', 'Reach level 6 (Lead): unlocks the Orbid sweater', 50],
+  ]),
   ...A('Night', [
     ['n_boo', '👻', 'Boo!', 'Get scared by a ghost', 20],
     ['n_boo5', '😱', 'Scaredy-cat', 'Get scared by ghosts 5 times', 30, {stat: 'boo', n: 5}],
@@ -183,6 +187,7 @@ export function initProgress({G, net, me}){
     if (!me() || loadedFor !== me().id || !(n > 0)) return;
     const before = levelOf(P.xp); P.xp = Math.round(P.xp + n); const after = levelOf(P.xp);
     toast(`+${Math.round(n)} XP`, reason || '');
+    if (after.lv >= 6) setTimeout(() => ach('sweater_lv'), 1500);
     if (after.lv > before.lv){ toast(`⭐ Level ${after.lv}: ${after.name}!`, unlockText(after.lv), true); play('cheer', 0.5, 0); if (window.__mpSay) window.__mpSay(`⭐ reached level ${after.lv}: ${after.name}`); }
     refresh(); save();
   }
@@ -228,34 +233,98 @@ export function initProgress({G, net, me}){
   G.lockText = d => { const need = LOCKS[d.name]; return need && level() < need ? `🔒 ${d.name}: level ${need} (${LEVELS[need - 1].name}) needed · you are level ${level()}` : ''; };
   G.onLocked = () => ach('locked');
 
-  // ---------- the panel (Q) ----------
+  // ---------- the Orbid sweater: found in a secret spot, or unlocked at level 6 ----------
+  const hasSweater = () => !!(P.a.sweater_found || P.a.sweater_lv || level() >= 6);
+  window.__hasSweater = hasSweater;
+  // folded on top of the white closets in the far corner of the Stille ruimte (2.1 m up): you only see it from a distance
+  // or while jumping next to the closets; jump and press E to grab it
+  const SW = {x: 49.72, y: 2.135, z: 0.95};
+  const folded = new G.THREE.Group(); folded.position.set(SW.x, SW.y, SW.z); folded.rotation.y = 0.35; G.scene.add(folded);
+  { const T = G.THREE, wool = new T.MeshStandardMaterial({color: 0x9a9da2, roughness: 1});
+    const b = new T.Mesh(new T.BoxGeometry(0.34, 0.07, 0.28), wool); folded.add(b);
+    const fold = new T.Mesh(new T.BoxGeometry(0.34, 0.025, 0.12), new T.MeshStandardMaterial({color: 0x7b7e83, roughness: 1})); fold.position.set(0, 0.045, 0.06); folded.add(fold);
+    import('./avatar.js').then(({logoTexture}) => { const l = new T.Mesh(new T.PlaneGeometry(0.15, 0.05), new T.MeshStandardMaterial({map: logoTexture(T), transparent: true})); l.rotation.x = -Math.PI/2; l.position.set(0, 0.0365, -0.05); folded.add(l); }); }
+  const canGrab = () => { const s = G.state; return !P.a.sweater_found && s.lv === 0 && s.hop > 0.22 && Math.hypot(s.x - SW.x, s.z - SW.z) < 1.4; };
+  (window.__useHooks = window.__useHooks || []).push(() => {
+    if (!me() || !canGrab()) return false;
+    ach('sweater_found'); play('cheer', 0.8, 0);
+    toast('🧥 You found the Orbid sweater!', 'Press O to put it on (or Edit character). Everyone will see you wear it', true);
+    if (window.__mpSay) window.__mpSay('🧥 found the secret Orbid sweater!');
+    return true;
+  });
+  (window.__hintHooks = window.__hintHooks || []).push(() => me() && canGrab() ? (window.__isTouch ? 'Tap to grab the sweater!' : 'Press E to grab the sweater!') : '');
+  addEventListener('keydown', e => {
+    const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || !me() || e.repeat || e.code !== 'KeyO') return;
+    if (!hasSweater()){ toast('🧥 The Orbid sweater is still locked', 'Reach level 6 (Lead)… or find where it is hidden'); return; }
+    if (window.__setSweater){ const on = window.__setSweater(); toast(on ? '🧥 Orbid sweater on' : 'Sweater off', on ? 'Looking sharp' : ''); }
+  });
+
+  // ---------- the menu (Q, the level pill, or the button in the pause menu): overview, achievements, leaderboard ----------
   const panel = document.createElement('div'); panel.id = 'progPanel'; document.body.appendChild(panel);
-  let panelOpen = false;
-  function togglePanel(open = !panelOpen){ panelOpen = open; panel.style.display = open ? 'block' : 'none'; if (open) renderPanel(); }
+  let panelOpen = false, tab = 'ach', filter = 'all';
+  function togglePanel(open = !panelOpen){
+    panelOpen = open; panel.style.display = open ? 'block' : 'none';
+    // free the mouse so the menu can be clicked (the game shows its pause screen behind it; Resume continues)
+    if (open){ if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); renderPanel(); }
+  }
+  window.__openProgress = (t) => { if (t) tab = t; togglePanel(true); };
   addEventListener('keydown', e => {
     const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return;
-    if (e.code === 'KeyQ' && !e.repeat && me()){ togglePanel(); e.preventDefault(); }
-    else if (e.code === 'Escape' && panelOpen) togglePanel(false);
-  });
+    if (e.code === 'KeyQ' && !e.repeat && me()){ togglePanel(); e.preventDefault(); return; }
+    if (!panelOpen) return;
+    if (e.code === 'Escape'){ togglePanel(false); return; }
+    const k = {Digit1: 'home', Digit2: 'ach', Digit3: 'board'}[e.code]; if (k){ tab = k; renderPanel(); e.preventDefault(); e.stopPropagation(); }
+  }, true);
   addEventListener('wheel', e => { if (panelOpen) panel.scrollTop += e.deltaY; }, {passive: true});
+  panel.addEventListener('click', e => {
+    const b = e.target.closest('[data-tab],[data-filter],[data-act]'); if (!b) return;
+    if (b.dataset.tab) tab = b.dataset.tab; if (b.dataset.filter) filter = b.dataset.filter;
+    if (b.dataset.act === 'close') return togglePanel(false);
+    if (b.dataset.act === 'sweater' && window.__setSweater) window.__setSweater();
+    renderPanel();
+  });
+  // a button in the game's pause menu (Esc), where the mouse is free
+  { const c2 = document.getElementById('card2'); if (c2){ const b = document.createElement('button'); b.type = 'button'; b.textContent = '🏆 Achievements & progress (Q)';
+    b.style.cssText = 'margin-top:8px;width:100%;font-size:15px;padding:10px;border:0;border-radius:10px;background:#f2c230;color:#1d2229;font-weight:600;cursor:pointer';
+    b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (me()) window.__openProgress('ach'); }); c2.appendChild(b); } }
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
   function renderPanel(){
     const l = levelOf(P.xp), next = LEVELS.find(x => x.xp > P.xp), pct = next ? (P.xp - l.xp)/(next.xp - l.xp)*100 : 100;
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
-    let h = `<div class="hd"><h1>⭐ Level ${l.lv} · ${l.name}</h1><div class="note">${P.xp} XP${next ? ` · ${next.xp - P.xp} XP to level ${next.lv} (${next.name})` : ' · max level'} · Q or Esc to close${window.__isTouch ? '' : ' · mouse wheel scrolls'}</div><div class="big"><i style="width:${pct}%"></i></div></div><div class="bd">`;
-    for (const s of sections) h += s();
-    h += `<h2>🔒 Access</h2><div class="note">` + Object.entries(LOCKS).map(([d, need]) => `${level() >= need ? '✅' : '🔒'} ${esc(d)} (level ${need})`).join(' · ') + `</div>`;
-    const cats = [...new Set(ACHIEVEMENTS.map(a => a.cat))];
-    h += `<h2>🏆 Achievements · ${Object.keys(P.a).length} of ${ACHIEVEMENTS.length}</h2>`;
-    for (const c of cats){
-      const list = ACHIEVEMENTS.filter(a => a.cat === c), got = list.filter(a => P.a[a.id]).length;
-      h += `<div class="note" style="margin:10px 0 4px;font-weight:600;color:#1d2229">${esc(c)} · ${got}/${list.length}</div><div class="grid">`;
-      for (const a of list){ const on = !!P.a[a.id], prog = a.stat && !on ? ` (${Math.min(P.s[a.stat] || 0, a.n)}/${a.n})` : '';
-        h += `<div class="a${on ? '' : ' off'}"><span class="i">${a.icon}</span><div><b>${esc(a.name)}</b>${esc(a.how)}${prog} · ${a.xp} XP</div></div>`; }
-      h += `</div>`;
+    const got = Object.keys(P.a).filter(id => BY_ID[id]).length;
+    const tabBtn = (id, label) => `<button data-tab="${id}" style="border:0;border-radius:9px;padding:7px 12px;font-size:14px;font-weight:600;cursor:pointer;background:${tab === id ? '#2f5d9e' : '#eef1f5'};color:${tab === id ? '#fff' : '#1d2229'}">${label}</button>`;
+    let h = `<div class="hd"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h1>⭐ Level ${l.lv} · ${l.name}</h1><button data-act="close" style="border:0;background:#eef1f5;border-radius:9px;padding:6px 11px;font-size:15px;cursor:pointer">✕</button></div>`
+      + `<div class="note">${P.xp} XP${next ? ` · ${next.xp - P.xp} XP to level ${next.lv} (${next.name})` : ' · max level'} · 🏆 ${got}/${ACHIEVEMENTS.length}</div><div class="big"><i style="width:${pct}%"></i></div>`
+      + `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">${tabBtn('home', '1 · Overview')}${tabBtn('ach', '2 · Achievements')}${tabBtn('board', '3 · Leaderboard')}</div></div><div class="bd">`;
+    if (tab === 'home'){
+      for (const s of sections) h += s();
+      h += `<h2>🔒 Access</h2><div class="note">` + Object.entries(LOCKS).map(([d, need]) => `${level() >= need ? '✅' : '🔒'} ${esc(d)} (level ${need})`).join(' · ') + `</div>`;
+      const wearing = window.__wearingSweater && window.__wearingSweater();
+      h += `<h2>🧥 Orbid sweater</h2>` + (hasSweater()
+        ? `<div class="note">Unlocked! <button data-act="sweater" style="border:0;border-radius:8px;padding:5px 10px;margin-left:6px;cursor:pointer;background:#2f5d9e;color:#fff;font-weight:600">${wearing ? 'Take it off' : 'Put it on'} (O)</button></div>`
+        : `<div class="note">Locked. Reach level 6 (Lead), or find where it is hidden somewhere in the office…</div>`);
+      h += `<h2>⌨️ Keys</h2><div class="note">E: use / open · Space: jump · F: flashlight · Q: this menu · O: Orbid sweater · Enter: chat · M: sound · Esc: pause</div>`;
+    } else if (tab === 'ach'){
+      const fBtn = (id, label) => `<button data-filter="${id}" style="border:1px solid ${filter === id ? '#2f5d9e' : '#d5dbe3'};border-radius:16px;padding:4px 11px;font-size:13px;cursor:pointer;background:${filter === id ? '#e8eef8' : '#fff'};color:#1d2229">${label}</button>`;
+      h += `<div style="display:flex;gap:6px;margin:10px 0 2px;flex-wrap:wrap">${fBtn('all', 'All')}${fBtn('todo', 'To do')}${fBtn('done', 'Unlocked')}</div>`;
+      for (const c of [...new Set(ACHIEVEMENTS.map(a => a.cat))]){
+        const list = ACHIEVEMENTS.filter(a => a.cat === c), n = list.filter(a => P.a[a.id]).length;
+        const show = list.filter(a => filter === 'all' || (filter === 'done') === !!P.a[a.id]); if (!show.length) continue;
+        h += `<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px"><b style="font-size:14px">${esc(c)}</b><span class="note">${n}/${list.length}</span>`
+          + `<span style="flex:1;height:5px;border-radius:3px;background:#e6eaf0;overflow:hidden"><i style="display:block;height:100%;width:${n/list.length*100}%;background:#f2c230"></i></span></div><div class="grid">`;
+        for (const a of show){
+          const on = !!P.a[a.id], hidden = a.secret && !on;
+          const bar = a.stat && !on ? `<span style="display:block;height:4px;border-radius:2px;background:#e6eaf0;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(1, (P.s[a.stat] || 0)/a.n)*100}%;background:#2f5d9e"></i></span><span style="font-size:11px">${Math.min(P.s[a.stat] || 0, a.n)} / ${a.n}</span>` : '';
+          const when = on && P.a[a.id] > 1e12 ? ` · ${new Date(P.a[a.id]).toLocaleDateString('nl-BE')}` : '';
+          h += `<div class="a${on ? '' : ' off'}"><span class="i">${hidden ? '❓' : a.icon}</span><div><b>${hidden ? 'Secret achievement' : esc(a.name)}</b>${hidden ? 'Keep exploring the office…' : esc(a.how)}${bar}<div style="font-size:11px;opacity:.8;margin-top:2px">${on ? '✅ ' : ''}${a.xp} XP${when}</div></div></div>`;
+        }
+        h += `</div>`;
+      }
+    } else {
+      const who = me(), board = [...others.entries()].sort((a, b) => b[1].xp - a[1].xp).slice(0, 20);
+      h += `<h2>👥 Leaderboard</h2><table>` + board.map(([id, o], i) => `<tr${who && id === who.id ? ' style="font-weight:600;background:#fff8e1"' : ''}><td>${i + 1}</td><td>${esc(o.n)}</td><td>⭐ ${levelOf(o.xp).lv} ${levelOf(o.xp).name}</td><td style="text-align:right">${o.xp} XP</td><td style="text-align:right">🏆 ${o.a}</td></tr>`).join('') + `</table>`;
     }
-    const who = me(), board = [...others.entries()].sort((a, b) => b[1].xp - a[1].xp).slice(0, 10);
-    h += `<h2>👥 Leaderboard</h2><table>` + board.map(([id, o], i) => `<tr${who && id === who.id ? ' style="font-weight:600;background:#fff8e1"' : ''}><td>${i + 1}</td><td>${esc(o.n)}</td><td>⭐ ${levelOf(o.xp).lv} ${levelOf(o.xp).name}</td><td style="text-align:right">${o.xp} XP</td><td style="text-align:right">🏆 ${o.a}</td></tr>`).join('') + `</table>`;
-    panel.innerHTML = h + '</div>';
+    panel.innerHTML = h + `<div class="note" style="margin-top:12px">Q or Esc closes · 1 2 3 switch tabs${window.__isTouch ? '' : ' · the mouse wheel scrolls'}</div></div>`;
   }
 
   // ---------- achievements that come from where you are and when ----------
@@ -263,6 +332,7 @@ export function initProgress({G, net, me}){
   function tick(){
     const who = me(); if (!who){ pill.style.display = 'none'; return; }
     if (loadedFor !== who.id){ load(); return; }
+    folded.visible = !P.a.sweater_found;   // once found, the folded sweater is gone (for you)
     const now = performance.now(); if (now - tickT < 500) return; tickT = now;
     const s = G.state, z = s.zone || '', C = window.CLOCK, g = C && C.game ? C.game() : null, act = C && C.active ? C.active() : [];
     if (!s.started) return;
