@@ -8,6 +8,8 @@ try { muted = localStorage.getItem('office.muted') === '1'; } catch (e) {}
 export const sound = {
   get ready(){ return !!ctx; },
   get muted(){ return muted; },
+  get ctx(){ return ctx; },          // dance.js schedules its music on the same clock
+  get out(){ return master; },
   // must run from a click or key press (browsers only allow audio after a user action)
   unlock(){
     if (ctx){ if (ctx.state === 'suspended') ctx.resume(); return; }

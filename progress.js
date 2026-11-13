@@ -108,6 +108,18 @@ export const ACHIEVEMENTS = [
     ['b_flawless', '🛡️', 'Flawless', 'Win without taking any damage', 80],
     ['b_wins', '🥇', 'Undisputed', 'Win 10 fights', 60, {stat: 'boxWins', n: 10}],
   ]),
+  ...A('Dance', [
+    ['d_first', '🕺', 'First steps', 'Dance a song on the mats in Portus Ganda', 10],
+    ['d_clear', '✅', 'Still standing', 'Finish a song without failing', 15],
+    ['d_a', '🅰️', 'Straight A', 'Get an A or better', 25],
+    ['d_aaa', '🌟', 'Triple A', 'Get AAA on any song', 80],
+    ['d_fc', '🔗', 'Full combo', 'Finish a song without a single miss', 40],
+    ['d_hard', '🔥', 'Overtime', 'Clear a song on Hard', 40],
+    ['d_combo', '💯', 'On a roll', 'Reach a 100 combo', 25],
+    ['d_win', '🏆', 'Dance-off champion', 'Win a dance-off against colleagues', 30],
+    ['d_party', '🪩', 'Office party', 'Dance with four people at once', 40],
+    ['d_songs', '🎶', 'Regular', 'Dance 10 songs', 30, {stat: 'danceSongs', n: 10}],
+  ]),
   ...A('Secrets', [
     ['sweater_found', '🧥', 'The Orbid sweater', 'Find the hidden Orbid sweater', 100, {secret: true}],
     ['sweater_lv', '👔', 'Dressed for success', 'Reach level 6 (Lead): unlocks the Orbid sweater', 50],
