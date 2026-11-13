@@ -1337,18 +1337,26 @@ function findNearDoor(){ const lv = doorLevel(); let best = null, bd = 1.6; for 
 function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ const c = d.rect; if (px > c[0]-R && px < c[1]+R && pz > c[2]-R && pz < c[3]+R) return; d.target = 0; } else d.target = DOOR_OPEN;
   if (window.__onDoor) window.__onDoor(doors.indexOf(d), d.target > 0); }   // mp.js: the door opens / closes for everyone
 // jumping: Space (or the jump button on touch screens); only changes the view height, not where you can walk
-// A run-up (Shift + forward) jumps higher. Pressing jump again in the air goes to GAME.onAirJump (postit.js: stick a post-it).
+// A run-up (Shift + forward) jumps higher. Pressing jump again in the air goes to GAME.onAirJump (postit.js: wall kick, stick a post-it).
+// GAME.onTakeoff may change the take-off speed (postit.js: run-up and take-off line); GAME.boostHop adds upward speed in the air.
 let hopY = 0, hopV = 0;
 function hop(){
   if (!started || paused || GAME.controlLock || seat) return;
-  if (hopY > 0 || hopV > 0){ if (GAME.onAirJump) GAME.onAirJump(hopY); return; }
+  if (hopY > 0 || hopV > 0){ if (GAME.onAirJump) GAME.onAirJump(hopY, hopV); return; }
   const run = (keys.ShiftLeft || keys.ShiftRight) && (keys.KeyW || keys.ArrowUp || jvy < -0.5);
-  hopV = run ? 3.75 : 3.3;
+  let v = run ? 3.75 : 3.3;
+  if (GAME.onTakeoff){ const o = GAME.onTakeoff(v); if (o) v = o; }
+  hopV = v;
 }
 GAME.jump = hop;
+GAME.boostHop = dv => { if (hopY > 0) hopV += dv; };
 // Things you can use with E (or by tapping the prompt): modules add {tick(dt, keys) → prompt text, use() → handled?} to GAME.uses.
 // Every frame each tick runs (and may draw); the first prompt is shown. E goes to the first use() that handles it, otherwise the nearest door.
-GAME.uses = [];
+// toilet.js and boards.js put themselves in front; darts.js and tiles.js use their own window hooks, wrapped here.
+GAME.uses = [
+  {tick: (dt, k) => window.__onFrameDarts ? window.__onFrameDarts(dt, k) : '', use: () => !!(window.__onUseDarts && window.__onUseDarts())},
+  {tick: () => { const h = window.__onFrameTiles ? window.__onFrameTiles() : ''; return nearDoor ? '' : h; }, use: () => !!(window.__onUseTiles && window.__onUseTiles())},
+];
 function useOrDoor(){ for (const u of GAME.uses) if (u.use()) return; toggleDoor(); }
 doorHint.addEventListener('click', e => { e.preventDefault(); useOrDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); useOrDoor(); });
@@ -1397,7 +1405,7 @@ document.addEventListener('pointerlockerror', () => { locked = false; });
 document.addEventListener('mousemove', e => {
   mouseIn = true; mx = e.clientX / Math.max(1, innerWidth);
   if (!started || paused || isTouch) return;
-  const L = GAME.controlLock; if (L){ if (L.aim) L.aim(e.movementX || 0, e.movementY || 0, locked ? 1 : 1.8, e.clientX, e.clientY, !locked); return; }
+  const L = GAME.controlLock; if (L){ if (L.aim) L.aim(e.movementX || 0, e.movementY || 0, locked ? 1 : 1.8, e.clientX, e.clientY, !locked); else if (GAME.onAim) GAME.onAim(e.movementX || 0, e.movementY || 0, locked ? 1 : 1.8); return; }   // darts.js: controlLock = true + GAME.onAim
   look(e.movementX || 0, e.movementY || 0, locked ? 0.0022 : 0.004);
 });
 document.addEventListener('mouseout', e => { if (!e.relatedTarget) mouseIn = false; });
@@ -1414,7 +1422,7 @@ canvas.addEventListener('touchstart', e => { e.preventDefault(); if (!started) r
 canvas.addEventListener('touchmove', e => { e.preventDefault();
   for (const t of e.changedTouches){
     if (t.identifier === joyId){ let dx = t.clientX-jx0, dy = t.clientY-jy0; const L = Math.hypot(dx, dy), M = 50; if (L > M){ dx *= M/L; dy *= M/L; } jvx = dx/M; jvy = dy/M; knob.style.transform = `translate(${dx}px,${dy}px)`; }
-    else if (t.identifier === lookId){ const L = GAME.controlLock; if (L){ if (L.aim) L.aim(t.clientX-lx, t.clientY-ly, 2.4, t.clientX, t.clientY, true); } else look(t.clientX-lx, t.clientY-ly, 0.0065); lx = t.clientX; ly = t.clientY; } } }, {passive: false});
+    else if (t.identifier === lookId){ const L = GAME.controlLock; if (L){ if (L.aim) L.aim(t.clientX-lx, t.clientY-ly, 2.4, t.clientX, t.clientY, true); else if (GAME.onAim) GAME.onAim(t.clientX-lx, t.clientY-ly, 2.4); } else look(t.clientX-lx, t.clientY-ly, 0.0065); lx = t.clientX; ly = t.clientY; } } }, {passive: false});
 function endTouch(e){ for (const t of e.changedTouches){ if (t.identifier === joyId){ joyId = null; jvx = jvy = 0; joy.style.display = 'none'; } if (t.identifier === lookId){ lookId = null; const L = GAME.controlLock; if (L && L.press) L.press(false, t.clientX, t.clientY, true); } } }
 canvas.addEventListener('touchend', endTouch); canvas.addEventListener('touchcancel', endTouch);
 
@@ -1493,5 +1501,6 @@ window.dispatchEvent(new Event('game-ready'));
 <script type="module" src="clock.js"></script>
 <script type="module" src="toilet.js"></script>
 <script type="module" src="boards.js"></script>
+<script type="module" src="darts.js"></script>
 </body>
 </html>

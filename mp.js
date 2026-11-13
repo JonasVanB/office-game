@@ -9,6 +9,7 @@ import {cleanAvatar, defaultAvatar, buildAvatar, animateAvatar, makeNameTag} fro
 import {openCreator, avatarPicture} from './creator.js';
 import {play, spatial} from './sound.js';
 import {initPostits} from './postit.js';
+import {initTiles} from './tiles.js';
 
 const CFG = window.OFFICE_CONFIG || {};
 const MSAL_URL = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/+esm';
@@ -85,6 +86,11 @@ async function firebaseNet(){
     // postits/<user id> = {n, h, z, c, t}: everyone's best post-it on the high-jump wall
     setPostit(id, d){ D.set(D.ref(db, 'postits/' + id), d).catch(e => console.warn('post-it not saved:', e.message)); },
     removePostit(id){ D.remove(D.ref(db, 'postits/' + id)).catch(() => {}); },
+    // tiles/<panel>_<col>_<row> = {q, n, by, t}: quotes on the tile wall at desk 6
+    setTile(k, d){ D.set(D.ref(db, 'tiles/' + k), d).catch(e => console.warn('tile not saved:', e.message)); },
+    removeTile(k){ D.remove(D.ref(db, 'tiles/' + k)).catch(() => {}); },
+    onTiles(cb){ const p = D.ref(db, 'tiles');
+      D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('tiles not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
     onPostits(cb){ const p = D.ref(db, 'postits');
       D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('post-its not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
     // boards/<board>/<stroke> = {c: colour, w: width, p: "u,v u,v …"}: what everyone drew on each whiteboard (boards.js)
@@ -101,11 +107,15 @@ function localNet(){
   const saveBoards = all => { try { localStorage.setItem('office.localBoards', JSON.stringify(all)); } catch (e){} };
   const localPostits = () => { try { return JSON.parse(localStorage.getItem('office.localPostits')) || {}; } catch (e){ return {}; } };
   const savePostits = all => { try { localStorage.setItem('office.localPostits', JSON.stringify(all)); } catch (e){} };
+  let tileCb = () => {};
+  const localTiles = () => { try { return JSON.parse(localStorage.getItem('office.localTiles')) || {}; } catch (e){ return {}; } };
+  const saveTiles = all => { try { localStorage.setItem('office.localTiles', JSON.stringify(all)); } catch (e){} };
   bc.onmessage = e => { const {type, key, data} = e.data || {}; if (!key || key === myKey) return;
     if (type === 'door') return doorCb(e.data.i, e.data.o);
     if (type === 'postit') return postitCb(e.data.id, e.data.d);
     if (type === 'stroke'){ const f = boardCbs[e.data.b]; if (f) f.add(e.data.id, e.data.d); return; }
     if (type === 'clear'){ const f = boardCbs[e.data.b]; if (f) for (const id of e.data.ids) f.removed(id); return; }
+    if (type === 'tile') return tileCb(e.data.id, e.data.d);
     if (type === 'hello'){ if (mine) bc.postMessage({type: 'state', key: myKey, data: mine}); return; }
     if (type === 'bye') return cb('remove', key);
     if (type === 'state') cb('change', key, data); };
@@ -128,6 +138,9 @@ function localNet(){
     addStroke(b, d){ const all = localBoards(), id = 's' + Date.now().toString(36) + rid(); (all[b] = all[b] || {})[id] = d; saveBoards(all); bc.postMessage({type: 'stroke', key: myKey, b, id, d}); const f = boardCbs[b]; if (f) f.add(id, d); },
     clearBoard(b){ const all = localBoards(), ids = Object.keys(all[b] || {}); delete all[b]; saveBoards(all); bc.postMessage({type: 'clear', key: myKey, b, ids}); const f = boardCbs[b]; if (f) for (const id of ids) f.removed(id); },
     onBoard(b, add, removed){ boardCbs[b] = {add, removed}; const all = localBoards()[b] || {}; for (const id in all) add(id, all[id]); },
+    setTile(id, d){ const all = localTiles(); all[id] = d; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d}); },
+    removeTile(id){ const all = localTiles(); delete all[id]; saveTiles(all); bc.postMessage({type: 'tile', key: myKey, id, d: null}); },
+    onTiles(f){ tileCb = f; const all = localTiles(); for (const id in all) f(id, all[id]); },
   };
 }
 
@@ -341,7 +354,10 @@ async function main(){
   subscribedAt = performance.now(); net.subscribe(onPresence);
   net.onDoors(applyDoor);
   window.__onDoor = (i, open) => { if (i >= 0) net.setDoor(i, open); };
-  postits = initPostits({G, net, me: () => joined && user && profile ? {id: user.id, name: profile.name} : null});
+  window.__mpSay = text => sendChat(text);   // minigames (darts) brag in the chat: "Jonas: 🎯 threw 180 at darts!"
+  const me = () => joined && user && profile ? {id: user.id, name: profile.name} : null;
+  postits = initPostits({G, net, me});
+  initTiles({G, net, me});
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
   // for toilet.js (duels, other people's streams), sitting (who sits where) and boards.js (shared drawings)
   G.mp = {myKey: net.myKey, players: () => [...remotes.values()].map(r => ({key: r.key, name: r.name, x: r.x, y: r.ty, z: r.z, l: r.l || 0, si: r.si, pe: r.pe}))};

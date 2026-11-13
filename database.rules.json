@@ -30,6 +30,13 @@
         }
       }
     },
+    "tiles": {
+      ".read": true,
+      "$k": {
+        ".write": "$k.length <= 8",
+        ".validate": "newData.hasChildren(['q', 'n']) && newData.child('q').isString() && newData.child('q').val().length <= 70 && newData.child('n').isString() && newData.child('n').val().length <= 20"
+      }
+    },
     "doors": {
       ".read": true,
       "$i": {
