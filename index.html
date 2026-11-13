@@ -1393,7 +1393,7 @@ GAME.uses = [
   {tick: () => { for (const f of window.__hintHooks || []){ const h = f(); if (h) return h; } return ''; }, use: () => (window.__useHooks || []).some(f => f())},
   {tick: () => { const h = window.__onFrameTiles ? window.__onFrameTiles() : ''; return nearDoor ? '' : h; }, use: () => !!(window.__onUseTiles && window.__onUseTiles())},
 ];
-function useOrDoor(){ for (const u of GAME.uses) if (u.use()) return; toggleDoor(); }
+function useOrDoor(){ for (const u of GAME.uses){ let r = false; try { r = u.use(); } catch (e){ console.error('GAME.uses use:', e); } if (r) return; } toggleDoor(); }
 doorHint.addEventListener('click', e => { e.preventDefault(); useOrDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); useOrDoor(); });
 // Minigames put the player on a spot looking a given way (GAME.setView). While GAME.controlLock holds an object, walking and looking stop
@@ -1514,10 +1514,10 @@ function frame(){
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
   camera.position.set(px, seat ? seat.base + seat.h + 0.72 : EYE + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
   const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone; st.si = seat ? seat.h : 0;
-  if (window.__onFrame) window.__onFrame(dt);
+  if (window.__onFrame){ try { window.__onFrame(dt); } catch (e){ console.error('mp.js frame:', e); } }   // a module error must never freeze the game
   if (window.__onFrameClock) window.__onFrameClock(dt);
   camera.updateMatrixWorld();
-  let useHint = ''; for (const u of GAME.uses){ const h = u.tick(dt, keys); if (h && !useHint) useHint = h; }   // toilet.js, boards.js, sitting, darts, tickets, tiles
+  let useHint = ''; for (const u of GAME.uses){ let h = ''; try { h = u.tick(dt, keys); } catch (e){ if (!u.failed){ u.failed = 1; console.error('GAME.uses tick:', e); } } if (h && !useHint) useHint = h; }   // toilet.js, boards.js, sitting, darts, tickets, tiles (errors are logged, not fatal)
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
   const lockMsg = nearDoor && nearDoor.target <= 0 && GAME.lockText ? GAME.lockText(nearDoor) : '';   // not 'locked': that name is the pointer lock
