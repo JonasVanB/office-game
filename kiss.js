@@ -31,7 +31,7 @@ const el = (tag, css) => { const e = document.createElement(tag); e.style.cssTex
 
 function init(){
   G = window.GAME; THREE = G.THREE;
-  hud = el('div', 'position:fixed;top:72px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(40,16,30,.82);color:#fff;border-radius:12px;padding:8px 16px 9px;font-size:14px;text-align:center;pointer-events:none;min-width:290px;max-width:92vw');
+  hud = el('div', 'position:fixed;top:72px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(40,16,30,.82);color:#fff;border-radius:12px;padding:8px 16px 9px;font-size:14px;text-align:center;pointer-events:none;min-width:290px;max-width:92vw'); hud.className = 'gameHud';
   help = el('div', 'position:fixed;bottom:22%;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(20,24,30,.7);color:#fff;border-radius:10px;padding:6px 12px;font-size:13px;pointer-events:none;text-align:center');
   card = el('div', 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);display:none;z-index:4;background:#fff;color:#1d2229;border-radius:16px;padding:20px 22px 16px;width:min(340px,88vw);line-height:1.5;font-size:14px;box-shadow:0 10px 40px rgba(0,0,0,.35)');
   addEventListener('keydown', e => onKey(e, true), true); addEventListener('keyup', e => onKey(e, false), true);

@@ -35,7 +35,7 @@ function el(tag, css, parent){ const e = document.createElement(tag); e.style.cs
 function init(){
   G = window.GAME; THREE = G.THREE; R = G.ring; if (!R) return;
   cv = el('canvas', 'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:2'); g2 = cv.getContext('2d');
-  hud = el('div', 'position:fixed;top:64px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(20,24,30,.78);color:#fff;border-radius:12px;padding:8px 12px;font-size:13px;pointer-events:none;width:min(560px,calc(100vw - 32px));box-sizing:border-box');
+  hud = el('div', 'position:fixed;top:64px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(20,24,30,.78);color:#fff;border-radius:12px;padding:8px 12px;font-size:13px;pointer-events:none;width:min(560px,calc(100vw - 32px));box-sizing:border-box'); hud.className = 'gameHud';
   help = el('div', 'position:fixed;left:50%;bottom:44px;transform:translateX(-50%);display:none;z-index:3;color:#fff;font-size:12px;background:rgba(20,24,30,.55);border-radius:8px;padding:4px 10px;pointer-events:none;white-space:nowrap;max-width:calc(100vw - 24px);overflow:hidden;text-overflow:ellipsis');
   toast = el('div', 'position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);display:none;z-index:3;background:rgba(20,24,30,.8);color:#fff;border-radius:12px;padding:10px 16px;font-size:15px;pointer-events:none');
   card = el('div', 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);display:none;z-index:4;background:#fff;color:#1d2229;border-radius:16px;padding:20px 22px 16px;min-width:270px;max-width:86vw;line-height:1.5;font-size:14px;box-shadow:0 10px 40px rgba(0,0,0,.35)');

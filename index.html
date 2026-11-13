@@ -27,6 +27,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#c9dcec;font-family:sy
 #me a{color:#2f5d9e}
 #mpStatus{font-weight:600;color:#1d2229!important}
 #online{top:10px;left:50%;transform:translateX(-50%);display:none}
+/* minigames with their own touch buttons (race.js, dance.js) hide the round jump / chat / emote buttons */
+body.race-pads .tbtn,body.dance-pads .tbtn,body.race-pads #hint,body.dance-pads #hint{display:none!important}
+/* phones: the top of the screen is crowded, so the map gets smaller and the left column leaves room for the clock */
+@media (max-width:520px){ .gameHud{top:190px!important} #mini{width:118px!important;height:auto!important} #online{font-size:11px;padding:5px 8px;left:auto;right:136px;transform:none;top:10px;max-width:calc(100vw - 260px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} #zone{max-width:calc(100vw - 270px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} #lvPill{max-width:calc(100vw - 166px)!important;min-width:0!important;box-sizing:border-box} }
 </style>
 </head>
 <body>
@@ -1055,7 +1059,7 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), mat(0x8fa585));
 const facade = (base) => { const t = makeTex(1, 128, (g, s) => { g.fillStyle = base; g.fillRect(0, 0, s, s);
   for (let r=0;r<4;r++) for (let k=0;k<4;k++){ g.fillStyle = rnd2() < 0.25 ? '#dfe6ea' : '#55636e'; g.fillRect(k*32 + 7, r*32 + 9, 18, 16); } }); t.repeat.set(3, 3); return new THREE.MeshStandardMaterial({map: t, roughness: 0.85}); };
 const FACADES = ['#b8b2a6', '#a9aeb4', '#c7bfb1'].map(facade);
-for (let i=0;i<14;i++){ const a = rnd()*Math.PI*2, r = 45 + rnd()*60, w = 8+rnd()*14, h = 6+rnd()*18, cx = 24+Math.cos(a)*r, cz = 6+Math.sin(a)*r; box(cx-w/2, cx+w/2, -13, h-4.5, cz-w/2, cz+w/2, FACADES[i%3]); box(cx-w/2-0.3, cx+w/2+0.3, h-4.5, h-4.2, cz-w/2-0.3, cz+w/2+0.3, mat(0x6c6a66)); }
+for (let i=0;i<14;i++){ const a = rnd()*Math.PI*2, r = 45 + rnd()*60, w = 8+rnd()*14, h = 6+rnd()*18, cx = 24+Math.cos(a)*r, cz = 6+Math.sin(a)*r; if (cx-w/2 < -3 && cx+w/2 > -52 && cz-w/2 < 34 && cz+w/2 > -12) continue; box(cx-w/2, cx+w/2, -13, h-4.5, cz-w/2, cz+w/2, FACADES[i%3]); box(cx-w/2-0.3, cx+w/2+0.3, h-4.5, h-4.2, cz-w/2-0.3, cz+w/2+0.3, mat(0x6c6a66)); }
 // street along wall B and trees around the building
 box(-60, 110, -12.99, -12.97, 22, 30, mat(0x55575a, {roughness: 0.95})); box(-60, 110, -12.97, -12.95, 25.9, 26.1, mat(0xe8e6df));
 box(-60, 110, -12.99, -12.85, 18, 22, mat(0xb4b0a8)); box(-60, 110, -12.99, -12.85, 30, 33, mat(0xb4b0a8));
@@ -1406,7 +1410,7 @@ let seat = null;
 function nearChair(){ let best = null, bd = 0.8;
   for (const c of CHAIRS){ if (c.mode !== mode || c.off) continue; const d = Math.hypot(px - c.x, pz - c.z); if (d < bd && !(window.__seatTaken && window.__seatTaken(c))){ bd = d; best = c; } }
   return best; }
-function sitDown(c){ seat = c; hopY = hopV = 0; px = c.x; pz = c.z; if (c.ang !== null){ yaw = c.ang; pitch = -0.12; } }
+function sitDown(c){ seat = c; if (window.__stat) window.__stat('sits'); hopY = hopV = 0; px = c.x; pz = c.z; if (c.ang !== null){ yaw = c.ang; pitch = -0.12; } }
 function standUp(){
   const c = seat; seat = null; if (!c) return;
   // step out behind the chair (away from the table), or to a side if that is blocked
@@ -1479,6 +1483,7 @@ function zoneName(x, z){
     if (x > 42 && z < 4.82) return 'Gravensteen'; if (x > 42 && (z > 8.18 || x > 43.06)) return 'Service Desk'; if (x >= 35) return '3e verdiep'; if (z < 3.14) return 'Stairwell (3e)'; if (x > 33.86 && z < 5.32) return 'Stair hallway (3e)';
     if (z > 7.68 && x < 30.45) return 'Men (3e)'; if (z > 7.68 && x > 32.55) return 'Ladies (3e)'; if (z > 11.17) return 'Utility (3e)'; return 'Entrance (3e)'; }
   if (mode === 1) return x > MX1 ? 'Mezzanine walkway' : (z < MMID ? 'Graslei (upstairs)' : 'Korenlei (upstairs)');
+  if (x < -0.2) return 'Rooftop racetrack';   // race.js: outside the emergency exit
   for (const r of rooms) if (x >= r[1] && x <= r[2] && z >= r[3] && z <= r[4]) return r[0];
   if (x < 14) return 'Landscape'; if (x < 28) return 'Meeting corridor'; if (x < 35) return 'Entrance hall'; return 'Stille ruimte';
 }
@@ -1512,7 +1517,7 @@ function frame(){
   const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 4 ? stairY(px, pz) : 0;
   const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
-  camera.position.set(px, seat ? seat.base + seat.h + 0.72 : EYE + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
+  camera.position.set(px, GAME.eyeY != null ? GAME.eyeY : seat ? seat.base + seat.h + 0.72 : EYE + fy + hopY, pz);   // GAME.eyeY: a minigame sets the eye height (race.js: seated) camera.rotation.set(pitch, yaw, 0);
   const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone; st.si = seat ? seat.h : 0;
   if (window.__onFrame){ try { window.__onFrame(dt); } catch (e){ console.error('mp.js frame:', e); } }   // a module error must never freeze the game
   if (window.__onFrameClock) window.__onFrameClock(dt);
@@ -1528,7 +1533,7 @@ function frame(){
   requestAnimationFrame(frame);
 }
 // bridge for clock.js (time of day): lights, materials and doors it changes
-Object.assign(GAME, {hemi, amb, sun, LIGHT, SCREEN, TVSCREEN, PCSCREENS: SCREENS, ENVMATS, doors, DOOR_OPEN});
+Object.assign(GAME, {hemi, amb, sun, LIGHT, SCREEN, TVSCREEN, PCSCREENS: SCREENS, ENVMATS, doors, DOOR_OPEN, colliders});   // race.js adds the rooftop track's railings to colliders
 frame();
 window.dispatchEvent(new Event('game-ready'));
 }
@@ -1542,5 +1547,7 @@ window.dispatchEvent(new Event('game-ready'));
 <script type="module" src="kiss.js"></script>
 <script type="module" src="boxing.js"></script>
 <script type="module" src="dance.js"></script>
+<script type="module" src="emotes.js"></script>
+<script type="module" src="race.js"></script>
 </body>
 </html>

@@ -378,10 +378,10 @@ function draw(dt){
   if (cv.width !== Math.round(W*dpr) || cv.height !== Math.round(H*dpr)){ cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
   g2.setTransform(dpr, 0, 0, dpr, 0, 0); g2.clearRect(0, 0, W, H);
   const f = me; if (!f || f.ph === 'lobby' || !f.notes) return;
-  const t = songTime(f.go), Lw = Math.round(Math.max(52, Math.min(isTouch() ? W/4.6 : 84, W*0.11))), PW = Lw*4, x0 = Math.round(W/2 - PW/2), ry = Math.max(70, H*0.13);
+  const t = songTime(f.go), Lw = Math.round(isTouch() ? Math.min(96, W/4.3) : Math.max(52, Math.min(84, W*0.11))), PW = Lw*4, x0 = Math.round(W/2 - PW/2), top = W < 560 ? 186 : 0, ry = top + Math.max(70, H*0.13);   // phones: start under the pills in the top-left corner
   const pps = speed*H*0.5, bottom = isTouch() ? H - 110 : H;
   // panel and lanes
-  g2.fillStyle = 'rgba(10,12,20,.62)'; g2.fillRect(x0 - 8, 0, PW + 16, H);
+  g2.fillStyle = 'rgba(10,12,20,.62)'; g2.fillRect(x0 - 8, top, PW + 16, H - top);
   g2.fillStyle = MAT_COL[f.mat]; g2.fillRect(x0 - 8, 0, 3, H); g2.fillRect(x0 + PW + 5, 0, 3, H);
   // beat lines moving up with the arrows
   const bt = 60/SONGS[f.s].bpm; g2.fillStyle = 'rgba(255,255,255,.07)';
@@ -420,11 +420,11 @@ function draw(dt){
     g2.fillStyle = gr; g2.fill(); g2.lineWidth = 2; g2.strokeStyle = 'rgba(0,0,0,.6)'; g2.stroke(); g2.globalAlpha = 1;
   }
   // life bar and score
-  g2.fillStyle = 'rgba(255,255,255,.15)'; g2.fillRect(x0, 14, PW, 10);
-  g2.fillStyle = f.failed ? '#ff6b6b' : f.life > 80 ? '#7cf0ff' : f.life > 25 ? '#5be37d' : '#ff9800'; g2.fillRect(x0, 14, PW*f.life/100, 10);
+  g2.fillStyle = 'rgba(255,255,255,.15)'; g2.fillRect(x0, top + 14, PW, 10);
+  g2.fillStyle = f.failed ? '#ff6b6b' : f.life > 80 ? '#7cf0ff' : f.life > 25 ? '#5be37d' : '#ff9800'; g2.fillRect(x0, top + 14, PW*f.life/100, 10);
   g2.textBaseline = 'middle'; g2.font = '700 14px system-ui, sans-serif'; g2.fillStyle = '#fff'; g2.textAlign = 'left';
-  g2.fillText(score().toLocaleString('en-US').replace(/,/g, ' '), x0, 38);
-  g2.textAlign = 'right'; g2.fillStyle = DIFF_COL[f.d]; g2.fillText(`${DIFF[f.d]} ${SONGS[f.s].lv[f.d]}`, x0 + PW, 38);
+  g2.fillText(score().toLocaleString('en-US').replace(/,/g, ' '), x0, top + 38);
+  g2.textAlign = 'right'; g2.fillStyle = DIFF_COL[f.d]; g2.fillText(`${DIFF[f.d]} ${SONGS[f.s].lv[f.d]}`, x0 + PW, top + 38);
   // progress along the panel edge
   g2.fillStyle = 'rgba(255,255,255,.5)'; g2.fillRect(x0 - 8, 0, (PW + 16)*Math.max(0, Math.min(1, t/songLen(f.s))), 3);
   // judgment and combo
@@ -437,7 +437,7 @@ function draw(dt){
     g2.restore(); g2.globalAlpha = 1; } }
   if (f.combo >= 4){ g2.font = '900 46px system-ui, sans-serif'; g2.lineWidth = 6; g2.strokeStyle = 'rgba(10,12,20,.85)'; const y = ry + Lw*1.9 + 54;
     g2.strokeText(String(f.combo), W/2, y); g2.fillStyle = '#fff'; g2.fillText(String(f.combo), W/2, y); g2.font = '700 12px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,255,255,.8)'; g2.fillText('COMBO', W/2, y + 30); }
-  if (f.failed){ g2.font = '900 16px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,110,110,.95)'; g2.fillText('FAILED', W/2, 58); }
+  if (f.failed){ g2.font = '900 16px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,110,110,.95)'; g2.fillText('FAILED', W/2, top + 58); }
   // countdown
   if (t < 0){ const n = Math.ceil(-t), big = n > 3 ? 'Ready?' : String(n), a = 1 - ((-t) % 1);
     g2.font = `900 ${n > 3 ? 54 : 96}px system-ui, sans-serif`; g2.lineWidth = 8; g2.strokeStyle = 'rgba(10,12,20,.8)'; g2.globalAlpha = 0.4 + 0.6*a;
@@ -608,6 +608,7 @@ function tick(dt, keys){
     if (me && me.ph === 'end'){ checkWin(); lobbyAcc += dt; if (lobbyAcc > 0.6 && !me.winDone){ lobbyAcc = 0; renderResults(); } }
   } else G.state.dd = null;
   help.style.display = me && (me.ph === 'count' || me.ph === 'play') && !isTouch() ? 'block' : 'none';
+  if (pads) document.body.classList.toggle('dance-pads', !!me);
   safe('draw', () => draw(dt));
   // the mats light up under everyone's feet
   safe('mats', () => { const all = everyone(); for (let i = 0; i < 4; i++){ const e = all.find(x => (x.dd.p | 0) === i); drawMat(i, e ? (e.mine ? keyDown.reduce((a, d, l) => a | (d ? 1 << l : 0), 0) : e.dd.k | 0) : 0, !!e); } });

@@ -22,7 +22,7 @@ function el(tag, css, parent){ const e = document.createElement(tag); e.style.cs
 function init(){
   G = window.GAME; THREE = G.THREE; tmp = new THREE.Vector3(); tmp2 = new THREE.Vector3();
   cv = el('canvas', 'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:2'); g2 = cv.getContext('2d');
-  hud = el('div', 'position:fixed;top:72px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(20,24,30,.72);color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;text-align:center;pointer-events:none;min-width:260px');
+  hud = el('div', 'position:fixed;top:72px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(20,24,30,.72);color:#fff;border-radius:12px;padding:8px 14px;font-size:14px;text-align:center;pointer-events:none;min-width:260px'); hud.className = 'gameHud';
   hud.innerHTML = '<div style="display:flex;align-items:center;gap:10px;justify-content:center"><span>Bladder</span><span style="flex:1;height:10px;background:rgba(255,255,255,.2);border-radius:5px;overflow:hidden;min-width:120px"><b style="display:block;height:100%;width:100%;background:#f2c230;border-radius:5px"></b></span></div>'
     + '<div style="margin-top:4px;font-weight:600"><span></span> <span style="color:#f2c230"></span></div><div style="margin-top:2px;color:#9cc3e6;font-weight:600"></div><div style="font-size:12px;opacity:.75;margin-top:2px"></div>';
   hudBar = hud.querySelector('b'); [hudScore, hudCombo] = hud.children[1].querySelectorAll('span'); hudVs = hud.children[2]; hudHelp = hud.children[3];

@@ -124,6 +124,29 @@ export const ACHIEVEMENTS = [
     ['sweater_found', '🧥', 'The Orbid sweater', 'Find the hidden Orbid sweater', 100, {secret: true}],
     ['sweater_lv', '👔', 'Dressed for success', 'Reach level 6 (Lead): unlocks the Orbid sweater', 50],
   ]),
+  ...A('Emotes', [
+    ['e_first', '👋', 'Hello there', 'Use an emote (G, or 😀 on touch screens)', 5],
+    ['e_hf', '✋', 'Up top!', 'High-five a colleague: both do ✋ facing each other', 20],
+    ['e_hf10', '🙌', 'High-five machine', 'High-five 10 times', 40, {stat: 'highFives', n: 10}],
+    ['e_party', '🪩', 'Dance party', 'Do the dance emote with 2 colleagues dancing next to you', 30],
+    ['e_all', '🎭', 'Body language', 'Use every emote', 20],
+  ]),
+  ...A('Chair racing', [
+    ['r_exit', '🚪', 'Fire drill', 'Go out through the emergency exit', 15, {secret: true}],
+    ['r_first', '🪑', 'Wheels on', 'Finish a chair race', 10],
+    ['r_win', '🏆', 'Grand Prix winner', 'Win a chair race against colleagues', 35],
+    ['r_pb', '⏱️', 'Personal best', 'Beat your own best lap (race your ghost)', 15],
+    ['r_fast', '⚡', 'Speed demon', 'Drive a lap under 13 seconds', 40],
+    ['r_drift', '🌀', 'Drift king', 'Get 4 drift boosts in one lap', 30],
+    ['r_clean', '✨', 'Clean race', 'Finish a race without touching the railing', 30],
+    ['r_laps', '🔁', 'Track regular', 'Drive 50 laps', 40, {stat: 'raceLaps', n: 50}],
+  ]),
+  ...A('Daily quests', [
+    ['q_first', '📅', 'Quest giver', 'Complete a daily quest', 10],
+    ['q_all', '🌟', 'Full day', "Complete all three of a day's quests", 30],
+    ['q_streak', '🔥', 'On a streak', 'Complete all daily quests 3 days in a row', 60],
+    ['q_10', '📜', 'Questing', 'Complete 10 daily quests', 40, {stat: 'quests', n: 10}],
+  ]),
   ...A('Night', [
     ['n_boo', '👻', 'Boo!', 'Get scared by a ghost', 20],
     ['n_boo5', '😱', 'Scaredy-cat', 'Get scared by ghosts 5 times', 30, {stat: 'boo', n: 5}],
@@ -187,7 +210,7 @@ export function initProgress({G, net, me}){
   function save(){
     const who = me(); if (!who || loadedFor !== who.id) return;
     clearTimeout(saveT); saveT = setTimeout(() => {
-      const d = {xp: P.xp, a: P.a, s: P.s, d: P.d, r: P.r || {}, tk: P.tk || null, n: who.name, t: Date.now()};
+      const d = {xp: P.xp, a: P.a, s: P.s, d: P.d, r: P.r || {}, tk: P.tk || null, q: P.q || null, n: who.name, t: Date.now()};
       try { localStorage.setItem('office.progress.' + who.id, JSON.stringify(d)); } catch (e) {}
       net.saveProgress(who.id, d);
     }, 1200);
@@ -232,7 +255,7 @@ export function initProgress({G, net, me}){
   function refresh(){
     const l = levelOf(P.xp), next = LEVELS.find(x => x.xp > P.xp), pct = next ? (P.xp - l.xp)/(next.xp - l.xp)*100 : 100;
     const n = Object.keys(P.a).length;
-    pill.innerHTML = `<b>⭐ ${l.lv} · ${l.name}</b> <span style="opacity:.75">${P.xp} XP · 🏆 ${n}/${ACHIEVEMENTS.length}</span><div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>`;
+    pill.innerHTML = `<b>⭐ ${l.lv} · ${l.name}</b> <span style="opacity:.75">${P.xp} XP · 🏆 ${n}/${ACHIEVEMENTS.length}${window.__questPill ? window.__questPill() : ''}</span><div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>`;
     pill.style.display = me() ? 'block' : 'none';
     const go = document.getElementById('goto'); if (go) pill.style.top = (go.offsetTop + go.offsetHeight + 6) + 'px';
     if (panelOpen) renderPanel();

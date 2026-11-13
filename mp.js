@@ -12,6 +12,7 @@ import {initPostits} from './postit.js';
 import {initTiles} from './tiles.js';
 import {initProgress} from './progress.js';
 import {initTickets} from './tickets.js';
+import {initQuests} from './quests.js';
 
 const CFG = window.OFFICE_CONFIG || {};
 const MSAL_URL = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/+esm';
@@ -156,7 +157,7 @@ function localNet(){
 
 // ---------- other players in the 3D scene ----------
 const remotes = new Map();
-let G = null, net = null, postits = null, prog = null, tickets = null;
+let G = null, net = null, postits = null, prog = null, tickets = null, quests = null;
 
 function dropRemote(key){
   const r = remotes.get(key); if (!r) return;
@@ -184,7 +185,7 @@ function onPresence(type, key, v){
   }
   r.tx = v.x; r.ty = v.y || 0; r.tz = v.z; r.tr = v.r || 0; r.l = v.l || 0; r.name = name; r.color = av.shirt; r.seen = performance.now();
   r.av = av; r.kb = v.kb || null; r.kh = v.kh ? 1 : 0; r.ks = v.ks || 0; r.kg = v.kg || null;   // kiss.js: beanbag seat, holding, start time, game state
-  r.key = key; r.si = +v.si || 0; r.pe = v.pe || null; r.bx = v.bx || null; r.dd = v.dd || null;   // sitting (seat height), the toilet game (toilet.js), boxing (boxing.js), dancing (dance.js)
+  r.key = key; r.si = +v.si || 0; r.pe = v.pe || null; r.bx = v.bx || null; r.dd = v.dd || null; r.em = v.em || null; r.rc = v.rc || null;   // sitting (seat height), the toilet game (toilet.js), boxing (boxing.js), dancing (dance.js)
   // a new chat message (c = text, ct = when): bubble above their head and a line in the chat log
   if (v.c && v.ct && v.ct !== r.ct){ r.ct = v.ct; if (net.now() - v.ct < 15000) showChat(r, name, String(v.c).slice(0, MAXCHAT)); }
   refreshOnline();
@@ -220,7 +221,7 @@ function chatUI(){
   });
   // touch screens: round buttons for chat and jumping
   if (window.__isTouch){
-    for (const [id, label, bottom, fn] of [['jumpBtn', '⤒', 96, () => G.jump && G.jump()], ['chatBtn', '💬', 162, () => joined && openChat()]]){
+    for (const [id, label, bottom, fn] of [['jumpBtn', '⤒', 96, () => G.jump && G.jump()], ['chatBtn', '💬', 162, () => joined && openChat()], ['emoteBtn', '😀', 228, () => joined && window.__openEmotes && window.__openEmotes()]]){
       const b = document.createElement('div'); b.id = id; b.className = 'tbtn'; b.textContent = label; b.style.bottom = bottom + 'px';
       b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fn(); }); document.body.appendChild(b);
     }
@@ -230,7 +231,9 @@ function openChat(){ if (chatBar.style.display === 'block') return; chatBar.styl
 function closeChat(){ if (chatBar.style.display !== 'block') return; chatBar.style.display = 'none'; chatIn.blur(); }
 function sendChat(text){
   text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MAXCHAT); const now = performance.now();
-  if (!text || !joined || now - lastChat < 700) return; lastChat = now;
+  if (!text || !joined) return;
+  if (text[0] === '/' && window.__emoteCmd && window.__emoteCmd(text)) return true;   // emotes.js: /wave, /dance …
+  if (now - lastChat < 700) return; lastChat = now;
   net.send({c: text, ct: net.now()}); logLine(profile.name, text); play('pop', 0.4); return true;
 }
 function logLine(name, text){
@@ -304,17 +307,20 @@ function tick(dt){
       r.obj.position.y = r.y + r.si + 0.06 - 0.9; }
     if (G.poseBoxer) G.poseBoxer(r.obj, r.bx, net.now());   // boxing.js: gloves, guard, punches
     if (G.poseDancer) G.poseDancer(r.obj, r.dd, net.now());   // dance.js: bouncing on the beat, arms with the arrows
+    if (G.poseRacer) G.poseRacer(r.obj, r.rc, net.now());     // race.js: sitting on a racing office chair
+    if (G.poseEmote) G.poseEmote(r.obj, r.em, net.now());     // emotes.js: wave, cheer, dance …
     if (r.bubble && now > r.bubbleUntil){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); r.bubble = null; }
   }
   if (postits) postits.update();
   if (prog) prog.tick();
   if (tickets) tickets.update();
+  if (quests) quests.update();
   for (const i of pendingClose){ const d = G.doors[i]; if (!d || !insideDoor(d)){ if (d) d.target = 0; pendingClose.delete(i); } }
   if (!joined) return;
   const s = G.state, round = n => Math.round(n*100)/100;
-  const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv, si: s.si || 0, pe: s.pe || null, bx: s.bx || null, dd: s.dd || null}, extra = JSON.stringify([cur.si, cur.pe, cur.bx, cur.dd]);
+  const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv, si: s.si || 0, pe: s.pe || null, bx: s.bx || null, dd: s.dd || null, em: s.em || null, rc: s.rc || null}, extra = JSON.stringify([cur.si, cur.pe, cur.bx, cur.dd, cur.em, cur.rc]);
   const changed = !sent || Math.abs(cur.x - sent.x) > 0.02 || Math.abs(cur.z - sent.z) > 0.02 || Math.abs(cur.y - sent.y) > 0.02 || Math.abs(cur.r - sent.r) > 0.03 || cur.l !== sent.l || extra !== sent.extra;
-  if ((changed && now - lastSent > (s.bx ? 45 : s.dd ? 70 : 110)) || now - lastBeat > 15000){ net.send(cur); sent = Object.assign({extra}, cur); lastSent = lastBeat = now; }   // faster while boxing or dancing
+  if ((changed && now - lastSent > (s.bx ? 45 : s.rc && s.rc.ph === 'race' ? 50 : s.dd ? 70 : 110)) || now - lastBeat > 15000){ net.send(cur); sent = Object.assign({extra}, cur); lastSent = lastBeat = now; }   // faster while boxing or dancing
 }
 
 function drawMapExtra(ctx, PAD, MS, level){
@@ -389,10 +395,11 @@ async function main(){
   initTiles({G, net, me});
   prog = initProgress({G, net, me});
   tickets = initTickets({G, prog, me});
+  quests = initQuests({G, prog, me});
   window.__onlineCount = () => joined ? remotes.size + 1 : 0;
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
   // for toilet.js (duels, other people's streams), sitting (who sits where) and boards.js (shared drawings)
-  G.mp = {myKey: net.myKey, players: () => [...remotes.values()].map(r => ({key: r.key, name: r.name, x: r.x, y: r.ty, z: r.z, tx: r.tx, tz: r.tz, r: r.r, l: r.l || 0, si: r.si, pe: r.pe, bx: r.bx, dd: r.dd})),
+  G.mp = {myKey: net.myKey, players: () => [...remotes.values()].map(r => ({key: r.key, name: r.name, x: r.x, y: r.ty, z: r.z, tx: r.tx, tz: r.tz, r: r.r, l: r.l || 0, si: r.si, pe: r.pe, bx: r.bx, dd: r.dd, em: r.em, rc: r.rc})),
     setRing: up => net.setDoor('rng', up), now: () => net.now(), myName: () => (me() || {}).name || 'You'};
   window.__seatTaken = c => { for (const r of remotes.values()) if (r.si && (r.l || 0) === (c.mode === 2 ? 2 : 0) && Math.hypot(r.tx - c.x, r.tz - c.z) < 0.3) return true; return false; };
   window.__boardNet = {add: (b, d) => net.addStroke(b, d), clear: b => net.clearBoard(b), listen: (b, add, removed) => net.onBoard(b, add, removed)};

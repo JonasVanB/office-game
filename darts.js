@@ -56,7 +56,7 @@ function init(){
   G = window.GAME; THREE = G.THREE;
   for (const b of BOARDS){ b.C = new THREE.Vector3(...b.c); b.N = new THREE.Vector3(...b.n); b.R = new THREE.Vector3(...b.r); b.U = new THREE.Vector3(0, 1, 0); b.darts = []; }
   cv = el('canvas', 'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:2'); g2 = cv.getContext('2d');
-  hud = el('div', 'position:fixed;top:72px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(20,24,30,.78);color:#fff;border-radius:12px;padding:8px 16px 9px;font-size:14px;text-align:center;pointer-events:none;min-width:280px;max-width:90vw');
+  hud = el('div', 'position:fixed;top:72px;left:50%;transform:translateX(-50%);display:none;z-index:3;background:rgba(20,24,30,.78);color:#fff;border-radius:12px;padding:8px 16px 9px;font-size:14px;text-align:center;pointer-events:none;min-width:280px;max-width:90vw'); hud.className = 'gameHud';
   card = el('div', 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);display:none;z-index:4;background:#fff;color:#1d2229;border-radius:16px;padding:20px 22px 16px;width:min(360px,88vw);line-height:1.45;font-size:14px;box-shadow:0 10px 40px rgba(0,0,0,.35)');
   // aiming: wrap the toilet game's handler so both minigames share the mouse
   const prevAim = G.onAim;

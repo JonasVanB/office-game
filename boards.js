@@ -120,6 +120,7 @@ function flush(end){
   const d = {c: state.pen, w: state.pen === ERASER ? 4 : 0, p: pts.map(p => p[0] + ',' + p[1]).join(' ')};
   const id = 'own' + Math.random().toString(36).slice(2);
   if (net) net.add(state.b.id, d); else state.b.strokes.set(id, d);
+  if (window.__stat) window.__stat('boardStrokes');
   state.pts = end ? [] : [pts[pts.length - 1]]; state.sentAt = performance.now();
 }
 
