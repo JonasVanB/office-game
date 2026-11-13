@@ -99,6 +99,8 @@ export const ACHIEVEMENTS = [
     ['n_server', '📟', 'On call', 'Be by the server room during a server alert', 20],
     ['n_cleaner', '🧹', 'Clean desk policy', 'Meet the cleaner', 10],
     ['n_update', '💻', 'Patch night', 'Be online during the night-time Windows Update', 10],
+    ['n_power', '⚡', 'Lights out', 'Be in the office during a power failure', 20],
+    ['n_torch', '🔦', 'Who turned off the lights?', 'Switch on your flashlight (F)', 5],
   ]),
 ];
 const BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));

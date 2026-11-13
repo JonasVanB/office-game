@@ -59,6 +59,7 @@ Nothing yet
 | 19:00       | Alarm armed, lights off     | always                             |       |
 | 21:00–03:40 | Fire alarm                  | rare (7%)                          | ~2 real minutes |
 | 22:30–00:30 | Spooky night                | sometimes (15%)                    | ~3.5 real minutes |
+| 20:20–04:00 | Power failure *(added)*     | sometimes (12%)                    | ~75 real seconds; can happen on top of other events |
 | 22:00–03:40 | Burglar alarm               | rare (8%)                          | ~2 real minutes |
 | 20:00–04:40 | Server room alert / on-call | sometimes (35%)                    | 12 IT alerts, e.g. "Disk C: on SQL-PROD-01 is 96% full" |
 | 17:20–19:00 | Cleaners *(added by Claude)* | often (70%)                       | A cleaner walks around one area with a vacuum; a cart with a bucket and mop |
@@ -72,16 +73,18 @@ Only one of fire / burglar / spooky can happen per night. Everything is random b
 
 Every big event has a clear start banner (what and where), a line under the clock while it lasts, and an ending banner. The ghosts, the burglar and the cleaner are in the same place for every player; only the scares are per player.
 
-- **Spooky night** 👻: "The office is haunted tonight!". Four glowing sheet ghosts float along the Landscape, the meeting corridor, the Stille ruimte corridor and the 3e corridor, through doors and walls. Come within 2 m and the ghost rushes at you with a moan and vanishes, coming back 10 s later. The office turns dark and cold blue with purple fog, the lights barely work and keep flickering, TVs show static with a ghost face now and then, a low drone and wind play, plus whispers, footsteps, creaks, evil laughs, the printer printing by itself and doors opening or slamming by themselves (for everyone). The clock turns purple: "👻 Haunted until 02:30". Ends with "🌅 The ghosts are gone… for now".
+- **Spooky night** 👻: "The office is haunted tonight!". Ghost orbs drift around you and now and then a ghost face appears at a window with a whisper. Four glowing sheet ghosts float along the Landscape, the meeting corridor, the Stille ruimte corridor and the 3e corridor, through doors and walls. Come within 2 m and the ghost rushes at you with a moan and vanishes, coming back 10 s later. The office turns dark and cold blue with purple fog, the lights barely work and keep flickering, TVs show static with a ghost face now and then, a low drone and wind play, plus whispers, footsteps, creaks, evil laughs, the printer printing by itself and doors opening or slamming by themselves (for everyone). The clock turns purple: "👻 Haunted until 02:30". Ends with "🌅 The ghosts are gone… for now".
 - **Fire** 🔥: starts in one of three places, each with a cause: the printer in the Print room, the toaster in the 4e kitchen or the coffee machine in the 3e kitchen. Flames, embers and an orange glow; black smoke rises to the ceiling and spreads; the floor fills with smoke (thicker the closer you are); crackling; red flashing beacons near the exits; two-tone alarm; red pulsing light; TVs show "FIRE ALARM". Getting close gives "It's getting really hot here. Get out!". After about 2 minutes: "🚒 The fire brigade put out the fire".
 - **Burglar** 🚨: a burglar in black with a beanie, a mask, a loot sack and a flashlight (beam on the floor) sneaks up and down the 4e. Get within 4.5 m and he runs off ("The burglar spotted you and ran off!"). Siren, red/blue flashing beacons. Ends with "🚓 The police caught the burglar".
 - **Server room alert** 🖥️: a rotating red beacon above the server room door, a red glow in the server room, beeps, and all TVs show the alert. Ends with "✅ Server alert resolved".
+- **Power failure** ⚡: the whole office goes pitch dark. Green emergency lights and exit signs glow, PCs and TVs go off, and the UPS in the server room beeps. Press **F** for your flashlight (on phones it switches on by itself). The clock shows "⚡ Power failure until … · F: flashlight". Ends with "💡 Power is back".
+- **Flashlight** 🔦: F toggles it any time, handy at night when the motion-sensor lights are off.
 
 ## 7. Light and atmosphere
 
 - **Daylight through the windows follows the clock?** Yes
 - **Sunrise / sunset times:** follow the real season
-- **Ceiling lights:** on 7:00–19:00, motion sensor after that
+- **Ceiling lights:** on 7:00–19:00 (4e at 7:00, 3e at 7:10). After 19:00 a motion sensor: the lights stay on while you move and fade out after 60 s standing still; they flicker once when they switch back on. No flickering while walking from room to room. The clock always says what the lights are doing: "💡 motion-sensor lights", "💡 lights off: walk to turn them on", "👻 Haunted · lights failing" or "⚡ Power failure".
 - **Sounds:** coffee machine, keyboards, printer, lift bell, plus *(added)*: office PA chime for announcements, air conditioning hum, people murmuring (louder at coffee, lunch, the meeting and after work), server room fans, Teams ringtone, cleaners' vacuum, night creaks, alarms. All sounds get quieter with distance and come from the left or right. M (or clicking the clock) turns sound on/off.
 - **Implemented:** sky colour (night blue → dawn pink → day) follows the real sunrise and sunset in Ghent for today's date. Lights flick on like fluorescent tubes: 4e at 7:00, 3e at 7:10 ("floor by floor"). After 19:00 the lights switch on where you walk and go off after 45 s standing still. PC screens are on from 7:50 to 17:30.
 

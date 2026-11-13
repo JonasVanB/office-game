@@ -115,7 +115,32 @@ export function createFX(G, announce){
   let fled = {A: null, at: 0, x: 0, z: 0, dx: 0, dz: 0, gone: false}, fireSaid = null;
   const tmpC = new THREE.Color(), COLD = new THREE.Color(0x6a62d8), SPOOKFOG = new THREE.Color(0x150c28), SMOKEFOG = new THREE.Color(0x4d4945);
 
-  G.fx = {burglar, cleaner, cart, ghosts: GHOSTS.map(g => g.obj)};   // for testing in the console
+  // ================= flashlight (F): a beam from your view; handy at night, needed during a power failure =================
+  const torch = new THREE.SpotLight(0xfff1d6, 0, 15, 0.34, 0.6, 1.5); scene.add(torch); scene.add(torch.target);
+  const dirV = new THREE.Vector3(); let torchOn = false;
+  addEventListener('keydown', e => {
+    const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return;
+    if (e.code === 'KeyF' && !e.repeat && G.state.started){ torchOn = !torchOn; play('mouse', 0.8, 0); if (torchOn && window.__ach) window.__ach('n_torch'); }
+  });
+
+  // ================= power failure: emergency lights, glowing exit signs, the UPS beeping =================
+  const EMERG = [[7, 6.5, 0], [21, 6.5, 0], [31.5, 6.5, 0], [43, 6.5, 0], [32, 6.5, 2], [40, 6.5, 2], [46, 6.5, 2]].map(([x, z, lv]) => {
+    const g = add(new THREE.Group()); g.position.set(x, floorY(lv) + (lv === 2 ? 2.55 : 2.52), z);
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.12), basic(0xf4fff4))); const h = glow(0xd8ffe0, 2.2, 0.55); h.position.y = -0.1; g.add(h); return g; });
+  const EXITS = [[49.97, 2.4, 6.5, 0], [0.03, 2.4, 6.5, 0], [34.43, 2.35, 5.4, 0], [34.43, 2.35, 5.4, 2]].map(([x, y, z, lv]) => { const s = add(glow(0x22dd66, 1.1, 0.8)); s.position.set(x, floorY(lv) + y, z); return s; });
+  let upsNext = 0;
+
+  // ================= haunted extras: ghost orbs and faces at the windows =================
+  const orbs = []; for (let i = 0; i < 26; i++){ const s = add(glow(0xbfe8ff, 0.16, 0.9)); orbs.push({s, x: 0, y: 0, z: 0, lv: -1, ph: Math.random()*10}); }
+  const faceTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 60, 10, 64, 64, 62); gr.addColorStop(0, 'rgba(235,245,255,.95)'); gr.addColorStop(0.7, 'rgba(200,220,255,.6)'); gr.addColorStop(1, 'rgba(200,220,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.ellipse(64, 64, 50, 62, 0, 0, Math.PI*2); g.fill(); g.fillStyle = '#05060a';
+    for (const dx of [-18, 18]){ g.beginPath(); g.ellipse(64 + dx, 52, 9, 15, 0, 0, Math.PI*2); g.fill(); } g.beginPath(); g.ellipse(64, 92, 11, 17, 0, 0, Math.PI*2); g.fill();
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t; })();
+  const winFace = add(new THREE.Sprite(new THREE.SpriteMaterial({map: faceTex, transparent: true, depthWrite: false, fog: false}))); winFace.scale.set(0.55, 0.65, 1);
+  let faceAt = 0, faceNext = 0;
+
+  G.fx = {burglar, cleaner, cart, ghosts: GHOSTS.map(g => g.obj), torch, winFace};   // for testing in the console
   return {update(dt, ev){
     const st = G.state, {nowS, t, A} = ev, myLv = st.lv;
     const life = e => e ? Math.min(smooth(0, 6, A - e.A), smooth(0, 6, e.A + e.dur - A)) : 0;   // fades in and out over ~6 s
@@ -196,6 +221,35 @@ export function createFX(G, announce){
       animateAvatar(burglar, dt*(running ? 14 : 6), running ? 1.3 : 0.7);
       for (const c of burglar.children) if (c.material && c.material.blending === THREE.AdditiveBlending) c.material.opacity = (c.isSprite ? 1 : 0.13)*kb;
     } else burglar.visible = false;
+
+    // ---------- power failure ----------
+    const pw = !!ev.power;
+    for (const e of EMERG) e.visible = pw; for (const e of EXITS) e.visible = pw || ks > 0;
+    if (pw){
+      window.__ach && window.__ach("n_power");
+      G.hemi.intensity *= 0.4; G.amb.intensity *= 0.35; for (const m of G.ENVMATS || []) m.envMapIntensity *= 0.2;   // pitch dark, only the emergency lights
+      if (nowS > upsNext){ upsNext = nowS + 3.2; const s = spatial(26.7, 10.3, 0, 24); play('beep', Math.max(0.12, s.g), s.p); }   // the UPS in the server room
+    }
+    // ---------- flashlight: F, or automatically on touch screens when it is dark ----------
+    const dark = (ev.lit !== undefined ? ev.lit : 1) < 0.25;
+    const torchLit = st.started && (torchOn || (window.__isTouch && (pw || dark)));
+    torch.intensity = torchLit ? 1.7 : 0;
+    if (torchLit){ G.camera.getWorldPosition(torch.position); G.camera.getWorldDirection(dirV); torch.position.y -= 0.15; torch.target.position.copy(torch.position).addScaledVector(dirV, 6); }
+
+    // ---------- haunted: orbs drifting around you, a face at a window now and then ----------
+    for (const o of orbs){
+      if (ks <= 0){ o.s.visible = false; o.lv = -1; continue; }
+      if (o.lv !== myLv || Math.hypot(o.x - st.x, o.z - st.z) > 12){ const a = Math.random()*Math.PI*2, r = 2 + Math.random()*8; o.x = st.x + Math.cos(a)*r; o.z = st.z + Math.sin(a)*r; o.y = floorY(myLv) + 0.6 + Math.random()*1.8; o.lv = myLv; }
+      o.x += Math.sin(nowS*0.3 + o.ph)*dt*0.25; o.z += Math.cos(nowS*0.27 + o.ph*1.3)*dt*0.25; o.y += Math.sin(nowS*0.8 + o.ph)*dt*0.12;
+      o.s.visible = true; o.s.position.set(o.x, o.y, o.z); o.s.material.opacity = ks*(0.35 + 0.35*Math.sin(nowS*2 + o.ph));
+    }
+    if (ks > 0 && nowS > faceNext && myLv === 0){
+      faceNext = nowS + 12 + Math.random()*10; faceAt = nowS;
+      const side = st.z < 6.5 ? -0.2 : 13.2;   // the window wall you are closest to
+      winFace.position.set(Math.max(1, Math.min(49, st.x + (Math.random() - 0.5)*6)), 1.65, side);
+      const s = spatial(winFace.position.x, side, 0, 14); play("whisper", Math.max(0.3, s.g), s.p);
+    }
+    const fa = nowS - faceAt; winFace.visible = ks > 0 && fa < 2.2; if (winFace.visible) winFace.material.opacity = ks*Math.min(1, fa*3, (2.2 - fa)*2);
 
     // ---------- cleaner ----------
     const kc = life(ev.clean);
