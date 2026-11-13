@@ -21,6 +21,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#c9dcec;font-family:sy
 #card p,#card2 p{font-size:14px;margin:6px 0;color:#454b55}
 #card button,#card2 button{margin-top:12px;width:100%;font-size:16px;padding:12px;border:0;border-radius:10px;background:#2f5d9e;color:#fff;font-weight:600}
 #err{display:none}
+#msLogin{display:flex;align-items:center;justify-content:center;gap:10px;background:#2f2f2f!important}
+#me{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:14px}
+#me img{width:56px;height:72px;border-radius:10px;background:#e8eef5;object-fit:cover}
+#me a{color:#2f5d9e}
+#mpStatus{font-weight:600;color:#1d2229!important}
+#online{top:10px;left:50%;transform:translateX(-50%);display:none}
 </style>
 </head>
 <body>
@@ -50,6 +56,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#c9dcec;font-family:sy
 </select>
 <canvas id="mini"></canvas>
 <div id="hint" class="pill"></div>
+<div id="online" class="pill"></div>
 <div id="doorHint" class="pill" style="display:none;bottom:22%;left:50%;transform:translateX(-50%);font-size:15px;padding:8px 14px;pointer-events:auto;cursor:pointer"></div>
 <div id="joy"><div id="knob"></div></div>
 <div id="start"><div id="card">
@@ -57,6 +64,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#c9dcec;font-family:sy
 <p id="howto"></p>
 <p>You start in the Entrance hall on the 4e verdiep. The stairwell next to the lifts takes you down to the 3e verdiep.</p>
 <p id="err">Your browser couldn't start 3D (WebGL). Try another browser or device.</p>
+<div id="mp" style="display:none">
+<p id="mpStatus"></p>
+<button id="msLogin" type="button" style="display:none"><svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg><span>Sign in with Microsoft</span></button>
+<div id="me" style="display:none"><img id="meImg" alt=""><div><b id="meName"></b><br><a href="#" id="meEdit">Edit character</a> · <a href="#" id="meOut">Sign out</a></div></div>
+</div>
 <button id="go">Start walking</button>
 </div></div>
 <div id="pause"><div id="card2">
@@ -72,7 +84,7 @@ document.getElementById('howto').textContent = window.__isTouch
   : 'Move the mouse to look around (no clicking needed). WASD or arrow keys to walk, Shift to run, E to open or close the door in front of you. Press Esc to pause and get your mouse back.';
 document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · E: doors · Esc: pause';
 window.__showErr = function(m){ var e = document.getElementById('msg'); e.textContent = m; e.style.display = 'block'; };
-function __start(ev){ if (ev) ev.preventDefault(); document.getElementById('start').style.display = 'none'; window.__started = true; if (window.__onStart) window.__onStart(); else if (!window.__ready) window.__showErr('Loading 3D… one moment.'); }
+function __start(ev){ if (ev) ev.preventDefault(); document.getElementById('start').style.display = 'none'; window.__started = true; window.dispatchEvent(new Event('office-start')); if (window.__onStart) window.__onStart(); else if (!window.__ready) window.__showErr('Loading 3D… one moment.'); }
 document.getElementById('go').addEventListener('click', __start);
 document.getElementById('go').addEventListener('touchend', __start);
 (function load(srcs){
@@ -105,6 +117,8 @@ camera.rotation.order = 'YXZ';
 scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8f80, 0.72));
 scene.add(new THREE.AmbientLight(0xffffff, 0.32));
 const sun = new THREE.DirectionalLight(0xfff3df, 0.5); sun.position.set(12, 30, -18); scene.add(sun);
+// bridge for mp.js (multiplayer): the scene plus the player's own state, updated every frame
+const GAME = window.GAME = {THREE, scene, camera, renderer, state: {x: 0, y: 0, z: 0, yaw: 0, lv: 0, started: false}};
 
 let seed = 11; function rnd(){ seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
 
@@ -1063,6 +1077,7 @@ function buildMap(){
 function drawMap(){
   const w = mini.width, h = mini.height; mctx.save(); mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.clearRect(0, 0, w, h); mctx.drawImage(staticMap, 0, 0); mctx.restore();
   const x = PAD + px*MS, y = PAD + pz*MS, fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  if (window.__drawMapExtra) window.__drawMapExtra(mctx, PAD, MS, mapLevel);
   mctx.fillStyle = '#ff5a3c'; mctx.beginPath(); mctx.moveTo(x + fx*7, y + fz*7); mctx.lineTo(x - fz*4 - fx*3, y + fx*4 - fz*3); mctx.lineTo(x + fz*4 - fx*3, y - fx*4 - fz*3); mctx.closePath(); mctx.fill();
 }
 
@@ -1078,7 +1093,7 @@ doorHint.addEventListener('click', e => { e.preventDefault(); toggleDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); toggleDoor(); });
 function look(dx, dy, s){ yaw -= dx*s; pitch -= dy*s; pitch = Math.max(-1.45, Math.min(1.45, pitch)); }
 const keys = {};
-addEventListener('keydown', e => { if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ toggleDoor(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
+addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ toggleDoor(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; pause(); });
 // Mouse look without clicking: the "Start walking" click captures the mouse (pointer lock).
@@ -1163,6 +1178,8 @@ function frame(){
   const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 4 ? stairY(px, pz) : 0;
   const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   camera.position.set(px, EYE + fy, pz); camera.rotation.set(pitch, yaw, 0);
+  const st = GAME.state; st.x = px; st.y = fy; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused;
+  if (window.__onFrame) window.__onFrame(dt);
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
   const ht = nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
@@ -1172,7 +1189,10 @@ function frame(){
   requestAnimationFrame(frame);
 }
 frame();
+window.dispatchEvent(new Event('game-ready'));
 }
 </script>
+<script src="config.js"></script>
+<script type="module" src="mp.js"></script>
 </body>
 </html>

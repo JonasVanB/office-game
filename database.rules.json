@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "profiles": {
+      ".read": true,
+      "$oid": {
+        ".write": "$oid.length <= 64",
+        ".validate": "newData.hasChildren(['name', 'avatar']) && newData.child('name').isString() && newData.child('name').val().length <= 20"
+      }
+    },
+    "presence": {
+      ".read": true,
+      "$key": {
+        ".write": "$key.length <= 40",
+        ".validate": "newData.hasChildren(['x', 'z', 't']) && newData.child('x').isNumber() && newData.child('z').isNumber()"
+      }
+    }
+  }
+}
