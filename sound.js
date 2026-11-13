@@ -101,6 +101,13 @@ const FX = {
   run(v, pan){ const d = out(pan); let t = ctx.currentTime; for (let i = 0; i < 10; i++){ const g = ctx.createGain(); g.connect(d); env(g, t, 0.003, 0.02, 0.08, 0.35*v*(1 - i/12)); noise(g, t, 0.15, 'lowpass', 700); t += 0.27; } },
   // a soft "pop" when a chat message appears
   pop(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 0.12, 600, 'sine', 0.12*v); o.frequency.exponentialRampToValueAtTime(1100, t + 0.08); },
+  // toilet flush: a rush of water that rises, then refill hiss
+  flush(v, pan){ const d = out(pan), t = ctx.currentTime;
+    const g = ctx.createGain(); g.connect(d); env(g, t, 0.15, 1.2, 1.6, 0.45*v); const n = noise(g, t, 3.2, 'lowpass', 600, 0.8);
+    n.f.frequency.setValueAtTime(400, t); n.f.frequency.linearRampToValueAtTime(1600, t + 0.5); n.f.frequency.linearRampToValueAtTime(500, t + 3);
+    const g2 = ctx.createGain(); g2.connect(d); env(g2, t + 2.2, 0.5, 2.5, 1.2, 0.06*v); noise(g2, t + 2.2, 4.5, 'highpass', 4000); },
+  // a hit on the target: a short bright ding
+  ding(v, pan){ const d = out(pan), t = ctx.currentTime; tone(d, t, 0.25, 1320, 'sine', 0.1*v); tone(d, t + 0.06, 0.3, 1980, 'sine', 0.06*v); },
   // building creak at night
   creak(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 1.2, 70, 'sawtooth', 0.05*v, 0.3); o.frequency.linearRampToValueAtTime(55, t + 1.2); },
 };
@@ -141,11 +148,14 @@ function makeLoop(kind){
     const l = ctx.createOscillator(); l.type = 'square'; l.frequency.value = 1.1; const lg = ctx.createGain(); lg.gain.value = 160; l.connect(lg); lg.connect(o.frequency); l.start(); }
   else if (kind === 'siren'){ const o = ctx.createOscillator(); o.type = 'sawtooth'; const og = ctx.createGain(); og.gain.value = 0.18; o.connect(og); og.connect(g); o.start();
     const l = ctx.createOscillator(); l.frequency.value = 0.6; const lg = ctx.createGain(); lg.gain.value = 350; l.connect(lg); lg.connect(o.frequency); o.frequency.value = 900; l.start(); }
+  else if (kind === 'stream' || kind === 'splash'){   // pouring into water (stream) or onto tiles (splash)
+    const n = noise(g, t, BIG, 'bandpass', kind === 'stream' ? 2200 : 4200, kind === 'stream' ? 1.2 : 0.8);
+    const l = ctx.createOscillator(); l.frequency.value = 7; const lg = ctx.createGain(); lg.gain.value = kind === 'stream' ? 500 : 900; l.connect(lg); lg.connect(n.f.frequency); l.start(); }
   return {g, p};
 }
 // set a loop's volume (0..1) and pan; creates it the first time it becomes audible
 export function loop(kind, vol, pan = 0){
   if (!ctx) return; let L = loops[kind];
   if (!L){ if (vol < 0.005) return; L = loops[kind] = makeLoop(kind); }
-  const t = ctx.currentTime; L.g.gain.setTargetAtTime(Math.max(0, vol), t, 0.25); if (L.p) L.p.pan.setTargetAtTime(pan, t, 0.1);
+  const t = ctx.currentTime; L.g.gain.setTargetAtTime(Math.max(0, vol), t, kind === 'stream' || kind === 'splash' ? 0.05 : 0.25); if (L.p) L.p.pan.setTargetAtTime(pan, t, 0.1);
 }
