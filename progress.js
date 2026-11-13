@@ -90,6 +90,16 @@ export const ACHIEVEMENTS = [
     ['wc_duel', '🤺', 'Urinal duel', 'Play a urinal duel against a colleague', 15],
     ['wc_duelwin', '🏆', 'Duel champion', 'Win a urinal duel', 30],
   ]),
+  ...A('Boxing', [
+    ['b_secret', '🕹️', 'Secret lever', 'Find the lever that raises the boxing ring', 25, {secret: true}],
+    ['b_first', '🥊', 'Gloves on', 'Box a fight in the ring', 10],
+    ['b_win', '🏆', 'Champion', 'Win a fight', 30],
+    ['b_ko', '💥', 'Knockout', 'Win by knockout', 40],
+    ['b_counter', '⚡', 'Counter puncher', 'Land a counter during a wind-up', 20],
+    ['b_slip', '🦋', 'Float like a butterfly', 'Slip 5 punches in one fight', 30],
+    ['b_flawless', '🛡️', 'Flawless', 'Win without taking any damage', 80],
+    ['b_wins', '🥇', 'Undisputed', 'Win 10 fights', 60, {stat: 'boxWins', n: 10}],
+  ]),
   ...A('Night', [
     ['n_boo', '👻', 'Boo!', 'Get scared by a ghost', 20],
     ['n_boo5', '😱', 'Scaredy-cat', 'Get scared by ghosts 5 times', 30, {stat: 'boo', n: 5}],
