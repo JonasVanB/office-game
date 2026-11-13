@@ -394,14 +394,13 @@ gable(14, false); gable(35, false);
 mapWalls.push([0, 0, 0, 13, 2], [BL, 0, BL, 13, 2]);
 roof(0, 14); roof(35, BL, 43.6); arch(7); arch(42);   // Stille ruimte light strips start past the mezzanine
 ceiling(14, 35, 0, 13); ceiling(35, 39.03, 0, 13);   // flat ceiling also over the corridor between HR and Boekentoren
-const PANEL = new THREE.PlaneGeometry(0.6, 0.6), PANELIN = new THREE.PlaneGeometry(0.54, 0.54);
-const LFRAME = mat(0xdedcd6, {roughness: 0.4, metalness: 0.2}), DIFFUSE = basic(0xf1eee4), VENT = mat(0x9a9890, {roughness: 0.7});
+const PANEL = new THREE.PlaneGeometry(0.6, 0.6);
+const LFRAME = mat(0xdedcd6, {roughness: 0.4, metalness: 0.2}), VENT = mat(0x9a9890, {roughness: 0.7});
 const SMOKE = mat(0xf4f4f0, {roughness: 0.5}), SPRINK = mat(0xc9a64a, {roughness: 0.35, metalness: 0.7});
 // recessed LED panel: frame flush with the ceiling at y, bright diffuser in the middle with a slightly dimmer rim
 function ceilLight(x, y, z){
   box(x-0.31, x+0.31, y-0.012-BY, y-0.002-BY, z-0.31, z+0.31, LFRAME);
-  const p = new THREE.Mesh(PANEL, DIFFUSE); p.rotation.x = Math.PI/2; p.position.set(x, y-0.013, z); scene.add(p);
-  const q = new THREE.Mesh(PANELIN, LIGHT); q.rotation.x = Math.PI/2; q.position.set(x, y-0.014, z); scene.add(q);
+  const p = new THREE.Mesh(PANEL, LIGHT); p.rotation.x = Math.PI/2; p.position.set(x, y-0.013, z); scene.add(p);   // LIGHT: clock.js dims it at night
 }
 // ceiling fittings between the lights: an air grille, a smoke detector or a sprinkler head
 function ceilFit(kind, x, y, z){
@@ -1285,6 +1284,7 @@ addDoor('x', 8.18, 42.05, 43.01, DOORH, 2, 1, 'a', 'Service Desk');
 function doorAngle(d, a){ d.g.rotation.y = d.axis === 'x' ? -d.sg*d.swing*a : d.sg*d.swing*a; }
 function doorLevel(){ return mode === 2 ? 2 : mode === 1 ? 1 : mode === 0 ? 0 : -1; }
 
+const ENVMATS = [];   // materials with reflections; clock.js fades them with the room light
 // reflections on metal, glass and glossy surfaces: a small blurred environment of a bright office, rendered once at start-up.
 // Only those materials get it, so matt walls, floors and fabric cost nothing extra.
 try { const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene(), em = c => new THREE.MeshBasicMaterial({color: c, side: THREE.BackSide});
@@ -1294,7 +1294,7 @@ try { const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene(), em 
   add(0.1, 2.0, 16, -11.9, 1.2, 0, new THREE.Color(2.2, 2.5, 2.9)); add(0.1, 2.0, 16, 11.9, 1.2, 0, new THREE.Color(2.0, 2.3, 2.7));   // window bands
   const env = pm.fromScene(es, 0.03).texture; pm.dispose();
   const done = new Set(); scene.traverse(o => { const m = o.material; if (!m || done.has(m) || !m.isMeshStandardMaterial) return; done.add(m);
-    if (m.metalness >= 0.25 || m.roughness <= 0.4){ m.envMap = env; m.envMapIntensity = m.metalness >= 0.25 ? 0.9 : 0.45; m.needsUpdate = true; } });
+    if (m.metalness >= 0.25 || m.roughness <= 0.4){ m.envMap = env; m.envMapIntensity = m.userData.envBase = m.metalness >= 0.25 ? 0.9 : 0.45; m.needsUpdate = true; ENVMATS.push(m); } });
 } catch (e) { console.warn('no environment reflections', e); }
 
 // ---------- minimap ----------
@@ -1427,7 +1427,7 @@ function frame(){
   requestAnimationFrame(frame);
 }
 // bridge for clock.js (time of day): lights, materials and doors it changes
-Object.assign(GAME, {hemi, amb, sun, LIGHT, SCREEN, TVSCREEN, doors, DOOR_OPEN});
+Object.assign(GAME, {hemi, amb, sun, LIGHT, SCREEN, TVSCREEN, PCSCREENS: SCREENS, ENVMATS, doors, DOOR_OPEN});
 frame();
 window.dispatchEvent(new Event('game-ready'));
 }
