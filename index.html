@@ -82,7 +82,7 @@ window.__isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches
 document.getElementById('howto').textContent = window.__isTouch
   ? 'Drag on the left side to walk (a joystick appears). Drag on the right side to look around.'
   : 'Move the mouse to look around (no clicking needed). WASD or arrow keys to walk, Shift to run, E to open or close the door in front of you. Press Esc to pause and get your mouse back.';
-document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · Space: jump · E: doors · Enter: chat · M: sound · Esc: pause';
+document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · Space: jump · E: doors & toilets · Enter: chat · M: sound · Esc: pause';
 window.__showErr = function(m){ var e = document.getElementById('msg'); e.textContent = m; e.style.display = 'block'; };
 function __start(ev){ if (ev) ev.preventDefault(); document.getElementById('start').style.display = 'none'; window.__started = true; window.dispatchEvent(new Event('office-start')); if (window.__onStart) window.__onStart(); else if (!window.__ready) window.__showErr('Loading 3D… one moment.'); }
 document.getElementById('go').addEventListener('click', __start);
@@ -779,6 +779,15 @@ function tiles(axis, c, dir, a0, a1, y0, y1){
   else { me.rotation.y = dir > 0 ? 0 : Math.PI; me.position.set((a0+a1)/2, BY + (y0+y1)/2, c); }
   scene.add(me);
 }
+// urinals and toilets you can use (toilet.js: the aiming minigame). Each one: where you stand and face, and the aim area —
+// centre c, right (u) and up/away (v) directions as the player sees them, half-sizes hu / hv of the bowl, and where a puddle forms
+const FIXTURES = [], BOWLIN = mat(0xe4e7e7, {roughness: 0.2}), WATER = mat(0xb9d2dc, {roughness: 0.05, metalness: 0.1}), SEAT = mat(0xf6f6f3, {roughness: 0.35});
+function toiletBowl(cx){   // water and seat on top of a toilet block (bowl z 12.25–12.72, top at 0.42)
+  const w = new THREE.Mesh(new THREE.CircleGeometry(1, 28), WATER); w.scale.set(0.16, 0.19, 1); w.rotation.x = -Math.PI/2; w.position.set(cx, BY + 0.423, 12.47); scene.add(w);
+  const s = new THREE.Mesh(TORUS, SEAT); s.scale.set(0.2, 0.24, 0.3); s.rotation.x = -Math.PI/2; s.position.set(cx, BY + 0.435, 12.47); scene.add(s);
+  FIXTURES.push({kind: 'toilet', lv: BY < 0 ? 2 : 0, base: BY, stand: [cx, 11.86], yaw: Math.PI,
+    c: [cx, BY + 0.426, 12.47], u: [-1, 0, 0], v: [0, 0, 1], hu: 0.15, hv: 0.18, floor: [cx, 12.12]});
+}
 // both toilet rooms (fixtures, cubicles, tiled walls); built here for the 4e (green) and again on the 3e (light gray)
 function buildRestrooms(){
 const MX_A = 28.05, MX_B = 30.40, MZ_A = 7.73, MZ_B = 12.94;
@@ -794,9 +803,13 @@ tiles('z', CX0-0.05-0.002, -1, CZ0, MZ_B, 0, H); tiles('z', CX0+0.05+0.002, 1, C
 for (const x of [CD0, CD1]) box(x-0.025, x+0.025, 0, DOORH, CZ0-0.06, CZ0+0.06, FRAME);
 box(CD1-0.04, CD1, 0, DOORH-0.03, CZ0+0.07, CZ0+0.07+0.68, mat(0xd8dcd6, {roughness: 0.5}));   // door leaf, open
 box(29.6, 30.1, 0, 0.42, 12.25, 12.88, CERAMIC, true); box(29.55, 30.15, 0.42, 0.8, 12.72, 12.9, CERAMIC);   // toilet
+toiletBowl(29.85);
 // 3 wall-hung urinals on the wall facing the entrance, evenly spread along it
 const UZ = [0, 1, 2].map(i => 8.55 + (MZ_B - 8.55)*(i+0.5)/3);   // spread evenly between the corner block and wall B
-for (const z of UZ){ box(MX_A, MX_A+0.33, 0.48, 1.12, z-0.18, z+0.18, CERAMIC, true); box(MX_A, MX_A+0.05, 1.12, 1.2, z-0.03, z+0.03, METAL); }
+for (const z of UZ){ box(MX_A, MX_A+0.33, 0.48, 1.12, z-0.18, z+0.18, CERAMIC, true); box(MX_A, MX_A+0.05, 1.12, 1.2, z-0.03, z+0.03, METAL);
+  box(MX_A+0.33, MX_A+0.334, 0.56, 1.04, z-0.14, z+0.14, BOWLIN); box(MX_A+0.33, MX_A+0.336, 0.6, 0.62, z-0.025, z+0.025, METAL);   // bowl recess + drain
+  FIXTURES.push({kind: 'urinal', lv: BY < 0 ? 2 : 0, base: BY, stand: [MX_A+0.78, z], yaw: Math.PI/2,
+    c: [MX_A+0.337, BY+0.8, z], u: [0, 0, -1], v: [0, 1, 0], hu: 0.14, hv: 0.24, floor: [MX_A+0.5, z]}); }
 for (const z of [(UZ[0]+UZ[1])/2, (UZ[1]+UZ[2])/2]) box(MX_A, MX_A+0.45, 0.45, 1.5, z-0.01, z+0.01, mat(0xc9ccc8));
 // corner block left of the washbasin (corner of x = 28 and the corridor-side wall), tiled, as if another room sits behind it
 const CB_X = 28.95, CB_Z = 8.55;
@@ -833,7 +846,7 @@ for (const [a, b] of LDOORS){
   const hinge = a < LDIV ? a : b;   // leaves open against the outer walls of the cubicles
   box(hinge === a ? a : b-0.04, hinge === a ? a+0.04 : b, 0, DOORH-0.03, CZ0+0.07, CZ0+0.07+0.68, mat(0xd8dcd6, {roughness: 0.5}));
 }
-for (const cx of [33.15, 34.36]){ box(cx-0.25, cx+0.25, 0, 0.42, 12.25, 12.88, CERAMIC, true); box(cx-0.3, cx+0.3, 0.42, 0.8, 12.72, 12.9, CERAMIC); }   // toilets
+for (const cx of [33.15, 34.36]){ box(cx-0.25, cx+0.25, 0, 0.42, 12.25, 12.88, CERAMIC, true); box(cx-0.3, cx+0.3, 0.42, 0.8, 12.72, 12.9, CERAMIC); toiletBowl(cx); }   // toilets
 // washbasin + mirror on the corridor-side wall (mirror image of the Men's)
 box(32.7, 33.25, 0.82, 0.88, MZ_A, MZ_A+0.45, CERAMIC, true); box(32.9, 33.05, 0, 0.82, MZ_A, MZ_A+0.12, CERAMIC);
 box(32.95, 33.0, 0.88, 1.05, MZ_A+0.02, MZ_A+0.08, METAL);
@@ -1329,13 +1342,18 @@ function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ co
   if (window.__onDoor) window.__onDoor(doors.indexOf(d), d.target > 0); }   // mp.js: the door opens / closes for everyone
 // jumping: Space (or the jump button on touch screens); only changes the view height, not where you can walk
 let hopY = 0, hopV = 0;
-function hop(){ if (started && !paused && hopY === 0 && hopV === 0) hopV = 3.3; }
+function hop(){ if (started && !paused && !GAME.controlLock && hopY === 0 && hopV === 0) hopV = 3.3; }
 GAME.jump = hop;
-doorHint.addEventListener('click', e => { e.preventDefault(); toggleDoor(); });
-doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); toggleDoor(); });
+// E / the prompt: a fixture (toilet.js) gets first go, otherwise the nearest door
+function useOrDoor(){ if (window.__onUse && window.__onUse()) return; toggleDoor(); }
+doorHint.addEventListener('click', e => { e.preventDefault(); useOrDoor(); });
+doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); useOrDoor(); });
+// toilet.js: put the player on a spot looking a given way; while GAME.controlLock is set, walking stops and mouse / touch go to GAME.onAim
+GAME.fixtures = FIXTURES;
+GAME.setView = (x, z, y, p) => { px = x; pz = z; yaw = y; pitch = p; hopY = hopV = 0; };
 function look(dx, dy, s){ yaw -= dx*s; pitch -= dy*s; pitch = Math.max(-1.45, Math.min(1.45, pitch)); }
 const keys = {};
-addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ toggleDoor(); return; } if (e.code === 'Space'){ e.preventDefault(); if (!e.repeat) hop(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
+addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ useOrDoor(); return; } if (e.code === 'Space'){ e.preventDefault(); if (!e.repeat) hop(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; pause(); });
 // Mouse look without clicking: the "Start walking" click captures the mouse (pointer lock).
@@ -1353,6 +1371,7 @@ document.addEventListener('pointerlockerror', () => { locked = false; });
 document.addEventListener('mousemove', e => {
   mouseIn = true; mx = e.clientX / Math.max(1, innerWidth);
   if (!started || paused || isTouch) return;
+  if (GAME.controlLock){ if (GAME.onAim) GAME.onAim(e.movementX || 0, e.movementY || 0, locked ? 1 : 1.8); return; }
   look(e.movementX || 0, e.movementY || 0, locked ? 0.0022 : 0.004);
 });
 document.addEventListener('mouseout', e => { if (!e.relatedTarget) mouseIn = false; });
@@ -1361,12 +1380,13 @@ const joy = document.getElementById('joy'), knob = document.getElementById('knob
 let joyId = null, jx0 = 0, jy0 = 0, jvx = 0, jvy = 0, lookId = null, lx = 0, ly = 0;
 canvas.addEventListener('touchstart', e => { e.preventDefault(); if (!started) return;
   for (const t of e.changedTouches){
+    if (GAME.controlLock){ if (lookId === null){ lookId = t.identifier; lx = t.clientX; ly = t.clientY; } continue; }   // aiming: any finger drags the aim
     if (t.clientX < innerWidth*0.45 && joyId === null){ joyId = t.identifier; jx0 = t.clientX; jy0 = t.clientY; joy.style.left = jx0 + 'px'; joy.style.top = jy0 + 'px'; joy.style.display = 'block'; knob.style.transform = ''; }
     else if (lookId === null){ lookId = t.identifier; lx = t.clientX; ly = t.clientY; } } }, {passive: false});
 canvas.addEventListener('touchmove', e => { e.preventDefault();
   for (const t of e.changedTouches){
     if (t.identifier === joyId){ let dx = t.clientX-jx0, dy = t.clientY-jy0; const L = Math.hypot(dx, dy), M = 50; if (L > M){ dx *= M/L; dy *= M/L; } jvx = dx/M; jvy = dy/M; knob.style.transform = `translate(${dx}px,${dy}px)`; }
-    else if (t.identifier === lookId){ look(t.clientX-lx, t.clientY-ly, 0.0065); lx = t.clientX; ly = t.clientY; } } }, {passive: false});
+    else if (t.identifier === lookId){ if (GAME.controlLock){ if (GAME.onAim) GAME.onAim(t.clientX-lx, t.clientY-ly, 2.4); } else look(t.clientX-lx, t.clientY-ly, 0.0065); lx = t.clientX; ly = t.clientY; } } }, {passive: false});
 function endTouch(e){ for (const t of e.changedTouches){ if (t.identifier === joyId){ joyId = null; jvx = jvy = 0; joy.style.display = 'none'; } if (t.identifier === lookId) lookId = null; } }
 canvas.addEventListener('touchend', endTouch); canvas.addEventListener('touchcancel', endTouch);
 
@@ -1399,8 +1419,8 @@ const clock = new THREE.Clock();
 function frame(){
   const dt = Math.min(0.05, clock.getDelta());
   let fwd = 0, str = 0;
-  if (started && !paused && !locked && !isTouch && mouseIn){ if (mx < 0.06) yaw += 1.6*dt; else if (mx > 0.94) yaw -= 1.6*dt; }
-  if (started && !paused){
+  if (started && !paused && !locked && !isTouch && mouseIn && !GAME.controlLock){ if (mx < 0.06) yaw += 1.6*dt; else if (mx > 0.94) yaw -= 1.6*dt; }
+  if (started && !paused && !GAME.controlLock){
     if (keys.KeyW || keys.ArrowUp) fwd += 1; if (keys.KeyS || keys.ArrowDown) fwd -= 1;
     if (keys.KeyD || keys.ArrowRight) str += 1; if (keys.KeyA || keys.ArrowLeft) str -= 1;
     const kl = Math.hypot(fwd, str); if (kl > 1){ fwd /= kl; str /= kl; }
@@ -1424,9 +1444,11 @@ function frame(){
   const st = GAME.state; st.x = px; st.y = fy + hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone;
   if (window.__onFrame) window.__onFrame(dt);
   if (window.__onFrameClock) window.__onFrameClock(dt);
+  camera.updateMatrixWorld();
+  const useHint = window.__onFrameToilet ? window.__onFrameToilet(dt, keys) : '';   // toilet.js: draws the minigame, returns its prompt
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
-  const ht = nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
+  const ht = useHint ? useHint : GAME.controlLock ? '' : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
   if (ht !== lastHint){ lastHint = ht; doorHint.textContent = ht; doorHint.style.display = ht ? 'block' : 'none'; }
   const zn = zoneName(px, pz); if (zn !== lastZone){ zoneEl.textContent = zn; lastZone = zn; }
   renderer.render(scene, camera); drawMap();
@@ -1441,5 +1463,6 @@ window.dispatchEvent(new Event('game-ready'));
 <script src="config.js"></script>
 <script type="module" src="mp.js"></script>
 <script type="module" src="clock.js"></script>
+<script type="module" src="toilet.js"></script>
 </body>
 </html>
