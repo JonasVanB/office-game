@@ -248,6 +248,12 @@ function tick(dt){
   // PC screens: on during the working day, blue during the night-time Windows Update
   const pcs = winupd ? COL.update : (min >= 470 && min < 1050) ? COL.pcOn : COL.black;
   if (!G.SCREEN.emissive.equals(pcs)) G.SCREEN.emissive.copy(pcs);
+  // the desk monitors show a work view while on, a blue update screen during Windows Update, and go dark otherwise
+  const pcView = winupd ? COL.pcUpdate : pcs === COL.pcOn ? COL.pcView : COL.pcDark;
+  for (const m of G.PCSCREENS || []) if (!m.color.equals(pcView)){ m.color.copy(pcView); }
+  // reflections fade with the light in the room
+  const envK = 0.15 + 0.85*Math.max(day, Lcur);
+  for (const m of G.ENVMATS || []) m.envMapIntensity = m.userData.envBase*envK;
   // TVs: schedule while the building is open, red during a fire alarm, off otherwise
   const tvOn = fire || (min >= 420 && min < 1140), tvKey = fire ? 'fire' : tvOn ? hhmm(min) + g.wd : 'off';
   if (tvKey !== lastTV){ lastTV = tvKey; if (tvOn) drawTV(g, list, fire ? 'fire' : ''); G.TVSCREEN.color.copy(tvOn ? COL.white : COL.tvOff); }
@@ -304,7 +310,8 @@ function spookDoor(st){
 function init(){
   G = window.GAME; THREE = G.THREE;
   COL = {night: C(0x0b1322), day: C(0xc9dcec), dusk: C(0xe9a27a), sun: C(0xfff3df), sunLow: C(0xffb27a), moon: C(0x7f93bd), white: C(0xffffff),
-    red: C(0xff2a1a), blue: C(0x2a5bff), lampOn: C(0xfffcf2), lampOff: C(0x0e0f12), pcOn: C(0x0f1b2c), update: C(0x1d4fb0), black: C(0x000000), tvOff: C(0x16181c)};
+    red: C(0xff2a1a), blue: C(0x2a5bff), lampOn: C(0xfffcf2), lampOff: C(0x0e0f12), pcOn: C(0x0f1b2c), update: C(0x1d4fb0), black: C(0x000000), tvOff: C(0x16181c),
+    pcView: C(0xd8d8d8), pcDark: C(0x0d0e11), pcUpdate: C(0x3a6fd8)};
   tvCanvas = document.createElement('canvas'); tvCanvas.width = 1024; tvCanvas.height = 576; tvCtx = tvCanvas.getContext('2d');
   tvTex = new THREE.CanvasTexture(tvCanvas); tvTex.encoding = THREE.sRGBEncoding; tvTex.anisotropy = 4;
   G.TVSCREEN.map = tvTex; G.TVSCREEN.needsUpdate = true;
