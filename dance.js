@@ -144,13 +144,16 @@ function schedStep(c, dest, s, i, T){
 }
 function pumpMusic(){
   const L = listen, c = sound.ctx; if (!L || !c) return;
-  const st = stepDur(L.s), ahead = c.currentTime - L.start + 0.18;
+  if (c.state === 'suspended'){ try { c.resume(); } catch (e) {} }
+  const want = c.currentTime + (L.go - now())/1000, st = stepDur(L.s);
+  if (c.state === 'running' && Math.abs(L.start - want) > 0.08){ L.start = want; L.next = Math.max(L.next, Math.ceil((c.currentTime - want)/st)); }   // drifted: follow the shared clock
+  const ahead = c.currentTime - L.start + 0.18;
   while (L.next*st < ahead && L.next < BARS*16){ const T = L.start + L.next*st; if (T >= c.currentTime - 0.01) schedStep(c, L.gain, L.s, L.next, T); L.next++; }
 }
 // the song position as heard (output latency and the player's own offset taken off)
 function songTime(go){
   const c = sound.ctx, L = listen;
-  if (c && c.state === 'running' && L && L.go === go) return c.currentTime - (c.outputLatency || c.baseLatency || 0) - L.start - off/1000;
+  if (c && c.state === 'running' && L && L.go === go && Math.abs(L.start - (c.currentTime + (go - now())/1000)) < 0.1) return c.currentTime - (c.outputLatency || c.baseLatency || 0) - L.start - off/1000;
   return (now() - go)/1000 - off/1000;
 }
 
@@ -217,9 +220,9 @@ const busy = () => players().some(p => p.dd && (p.dd.ph === 'count' || p.dd.ph =
 function join(m){
   try { sound.unlock(); } catch (e) {}
   me = {mat: m.i, ph: 'lobby'}; quitArm = 0;
-  G.controlLock = {aim(){}, press(){}};
+  G.controlLock = {aim(){}, press(){}, noPause: true};
   G.setView(m.x, m.z, Math.PI/2, 0.02);
-  help.textContent = '← ↓ ↑ → or W A S D on the beat · hold the long arrows · E twice to stop'; renderLobby(); if (pads) pads.style.display = 'flex';
+  help.textContent = '← ↓ ↑ → or W A S D on the beat · hold the long arrows · Esc twice to stop'; renderLobby(); if (pads) pads.style.display = 'flex';
   if (window.__ach) window.__stat('danceMats');
 }
 function leave(){
@@ -263,6 +266,7 @@ function onKey(e){
   if (!me) return;
   const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA') return;
   const down = e.type === 'keydown', lane = KEYMAP[e.code];
+  if (e.code === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); if (down && !e.repeat) use(); return; }
   if (lane !== undefined){
     e.preventDefault(); e.stopImmediatePropagation();
     if (me.ph === 'lobby'){ if (down) menuKey(lane); return; }
@@ -285,7 +289,7 @@ function menuKey(lane){
 function hit(lane, ago){
   keyDown[lane] = true; const f = me; if (!f) return;
   f.flash[lane] = 1;
-  if ((f.ph !== 'play' && f.ph !== 'count') || f.failed) return;
+  if (f.ph !== 'play' && f.ph !== 'count') return;
   const t = songTime(f.go) - ago;
   let best2 = null;
   for (const n of f.notes){ if (n.lane !== lane || n.j) continue; if (n.t - t > WIN.O) break; if (t - n.t <= WIN.O){ best2 = n; break; } }
@@ -299,10 +303,10 @@ function hit(lane, ago){
 }
 function release(lane){ keyDown[lane] = false; }
 function judgeTime(){
-  const f = me, t = songTime(f.go);
+  const f = me, t = songTime(f.go), gap = performance.now() - (f.lastJudge || performance.now()); f.lastJudge = performance.now();
   for (const n of f.notes){
     if (n.t - t > 0.2) break;
-    if (!n.j && t - n.t > WIN.O){ n.j = 'M'; miss('M'); if (n.len) n.hold = 'ng'; }
+    if (!n.j && t - n.t > WIN.O){ n.j = 'M'; if (n.len) n.hold = 'ng'; if (gap > 400 && t - n.t > gap/1000 - 0.3){ f.counts.M++; f.combo = 0; } else miss('M'); }
     if (n.hold === 'on'){
       if (t >= n.t + n.len){ n.hold = 'ok'; f.pts += 10; f.counts.OK++; f.burst[n.lane] = {j: 'OK', at: performance.now()}; }
       else if (!keyDown[n.lane]){ if (n.rel === null) n.rel = t; else if (t - n.rel > 0.13){ n.hold = 'ng'; miss('NG'); } }
@@ -310,7 +314,7 @@ function judgeTime(){
     }
   }
   if (f.failed) return;
-  if (f.life <= 0){ f.failed = true; f.life = 0; say('Failed! Keep watching, the others are still going'); }
+  if (f.life <= 0){ f.failed = true; f.life = 0; say('Life bar empty: failed. Keep dancing to finish the song!'); }
 }
 function miss(j){ const f = me; f.counts[j]++; f.combo = 0; f.life = Math.max(0, f.life + LIFE[j]*(f.d === 0 ? 0.6 : 1)); f.last = {j, e: 0, at: performance.now()}; f.jc++; }   // Easy forgives a little more
 function toLobby(){ if (!me) return; Object.assign(me, {ph: 'lobby', notes: null, result: null}); renderLobby(); }
@@ -433,7 +437,7 @@ function draw(dt){
     g2.restore(); g2.globalAlpha = 1; } }
   if (f.combo >= 4){ g2.font = '900 46px system-ui, sans-serif'; g2.lineWidth = 6; g2.strokeStyle = 'rgba(10,12,20,.85)'; const y = ry + Lw*1.9 + 54;
     g2.strokeText(String(f.combo), W/2, y); g2.fillStyle = '#fff'; g2.fillText(String(f.combo), W/2, y); g2.font = '700 12px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,255,255,.8)'; g2.fillText('COMBO', W/2, y + 30); }
-  if (f.failed){ g2.font = '900 44px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,90,90,.9)'; g2.fillText('FAILED', W/2, H*0.55); }
+  if (f.failed){ g2.font = '900 16px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,110,110,.95)'; g2.fillText('FAILED', W/2, 58); }
   // countdown
   if (t < 0){ const n = Math.ceil(-t), big = n > 3 ? 'Ready?' : String(n), a = 1 - ((-t) % 1);
     g2.font = `900 ${n > 3 ? 54 : 96}px system-ui, sans-serif`; g2.lineWidth = 8; g2.strokeStyle = 'rgba(10,12,20,.8)'; g2.globalAlpha = 0.4 + 0.6*a;
@@ -532,15 +536,15 @@ function renderLobby(){
   const diffs = DIFF.map((d, i) => `<span data-d="${i}" style="flex:1;text-align:center;padding:6px 0;border-radius:8px;cursor:pointer;font-weight:600;${i === sel.d ? `background:${DIFF_COL[i]};color:#1d2229` : 'background:#f1f3f6;color:#69707a'}">${d} ${SONGS[sel.s].lv[i]}</span>`).join('');
   const who = on.length ? on.map(e => `<span style="display:inline-block;margin:2px 6px 0 0;padding:1px 8px;border-radius:10px;background:${MAT_COL[e.dd.p | 0]};color:#1d2229;font-size:12px;font-weight:600">${esc(e.name)}</span>`).join('') : '<span style="opacity:.6">Nobody else yet; colleagues can join on the other mats</span>';
   const t = isTouch();
-  card.innerHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:14px;height:14px;border-radius:4px;background:${MAT_COL[me.mat]}"></span><b style="font-size:17px">Dance-off · mat ${me.mat + 1}</b></div>`
+  const html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:14px;height:14px;border-radius:4px;background:${MAT_COL[me.mat]}"></span><b style="font-size:17px">Dance-off · mat ${me.mat + 1}</b></div>`
     + `<div style="display:grid;gap:5px">${list}</div><div style="display:flex;gap:6px;margin:8px 0">${diffs}</div>`
     + `<div style="display:flex;justify-content:space-between;font-size:12px;color:#454b55;margin-bottom:6px"><span>Speed <b data-sp="-1" style="cursor:pointer;padding:0 6px">−</b><b>${speed.toFixed(2)}×</b><b data-sp="1" style="cursor:pointer;padding:0 6px">+</b></span>`
     + `<span>Timing <b data-of="-1" style="cursor:pointer;padding:0 6px">−</b><b>${off > 0 ? '+' : ''}${off} ms</b><b data-of="1" style="cursor:pointer;padding:0 6px">+</b></span></div>`
     + `<div style="font-size:12px;color:#454b55;margin-bottom:8px">On the mats: ${who}</div>`
     + `<button type="button" data-go style="width:100%;font-size:16px;padding:10px;border:0;border-radius:10px;background:#2f5d9e;color:#fff;font-weight:600">${busy() ? 'Song in progress…' : 'Start' + (t ? '' : ' (Enter)')}</button>`
     + (t ? `<button type="button" data-leave style="width:100%;margin-top:6px;font-size:14px;padding:8px;border:0;border-radius:10px;background:#e8ebef;color:#1d2229">Step off</button>` : '')
-    + (t ? '' : `<div style="font-size:11px;color:#69707a;margin-top:8px;text-align:center">← → song · ↑ ↓ difficulty · − + speed · [ ] timing · E step off</div>`);
-  card.style.display = 'block';
+    + (t ? '' : `<div style="font-size:11px;color:#69707a;margin-top:8px;text-align:center">← → song · ↑ ↓ difficulty · − + speed · [ ] timing · E / Esc step off</div>`);
+  card.style.display = 'block'; if (html === card.__html) return; card.innerHTML = card.__html = html;
   const on2 = (sel2, fn) => card.querySelectorAll(sel2).forEach(b => { const go = e => { e.preventDefault(); e.stopPropagation(); fn(b); }; b.addEventListener('click', go); b.addEventListener('touchend', go); });
   on2('[data-s]', b => { sel.s = +b.dataset.s; saveCfg(); renderLobby(); });
   on2('[data-d]', b => { sel.d = +b.dataset.d; saveCfg(); renderLobby(); });
@@ -554,7 +558,7 @@ function renderResults(){
   const sess = session(), rank = sess && sess.list.length > 1 ? sess.list.slice().sort((a, b) => (b.dd.sc || 0) - (a.dd.sc || 0)) : null;
   const avg = f.errN ? Math.round(f.err/f.errN*1000) : 0, c = f.counts, t = isTouch();
   const rows = rank ? `<div style="margin-top:10px;border-top:1px solid #e3e6ea;padding-top:8px">${rank.map((e, i) => `<div style="display:flex;gap:8px;align-items:center;font-size:13px;${e.mine ? 'font-weight:700' : ''}"><span style="width:14px">${i + 1}</span><span style="width:10px;height:10px;border-radius:3px;background:${MAT_COL[e.dd.p | 0]}"></span><span style="flex:1">${esc(e.name)}</span><span style="color:${gradeCol(e.dd.gr) === '#fff' ? '#69707a' : '#1d2229'}">${e.dd.gr || '…'}</span><span style="width:78px;text-align:right">${(e.dd.sc || 0).toLocaleString('en-US')}</span></div>`).join('')}</div>` : '';
-  card.innerHTML = `<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:46px;font-weight:900;line-height:1;color:${r.gr === 'E' ? '#d64545' : r.gr.startsWith('A') ? '#c99a00' : '#1d2229'}">${r.gr}</span>`
+  const html = `<div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:46px;font-weight:900;line-height:1;color:${r.gr === 'E' ? '#d64545' : r.gr.startsWith('A') ? '#c99a00' : '#1d2229'}">${r.gr}</span>`
     + `<span><b style="font-size:20px">${r.sc.toLocaleString('en-US')}</b>${r.nb ? ' <span style="color:#2f9e5b;font-size:12px;font-weight:700">new best!</span>' : ''}<br><span style="color:#454b55;font-size:13px">${esc(SONGS[f.s].name)} · ${DIFF[f.d]}${r.fc ? ' · <b style="color:#2f9e5b">Full combo</b>' : f.failed ? ' · failed' : ''}</span></span></div>`
     + `<div style="display:grid;grid-template-columns:auto auto auto auto;gap:2px 14px;margin-top:10px;font-size:13px;color:#454b55">`
     + `<span>Perfect</span><b style="color:#1d2229">${c.P}</b><span>Freeze OK</span><b style="color:#1d2229">${c.OK}</b>`
@@ -564,7 +568,7 @@ function renderResults(){
     + rows
     + `<button type="button" data-again style="margin-top:12px;width:100%;font-size:16px;padding:10px;border:0;border-radius:10px;background:#2f5d9e;color:#fff;font-weight:600">Dance again${t ? '' : ' (Enter)'}</button>`
     + `<button type="button" data-leave style="width:100%;margin-top:6px;font-size:14px;padding:8px;border:0;border-radius:10px;background:#e8ebef;color:#1d2229">Step off${t ? '' : ' (E)'}</button>`;
-  card.style.display = 'block';
+  card.style.display = 'block'; if (html === card.__html) return; card.innerHTML = card.__html = html;
   const on2 = (sel2, fn) => card.querySelectorAll(sel2).forEach(b => { const go = e => { e.preventDefault(); e.stopPropagation(); fn(); }; b.addEventListener('click', go); b.addEventListener('touchend', go); });
   on2('[data-again]', toLobby); on2('[data-leave]', leave);
 }
@@ -584,7 +588,7 @@ function use(){
   if (me){
     if (me.ph === 'lobby' || me.ph === 'end'){ leave(); return true; }
     if (performance.now() - quitArm < 2000){ stopListen(); leave(); return true; }
-    quitArm = performance.now(); say('Press E again to stop dancing'); return true;
+    quitArm = performance.now(); say(`Press ${isTouch() ? 'stop' : 'E or Esc'} again to stop dancing`); return true;
   }
   if (!G.state.started || G.controlLock) return false;
   const m = onMat(); if (!m) return false;
@@ -592,21 +596,22 @@ function use(){
   join(m); return true;
 }
 let lobbyAcc = 0;
+const failed = {};
+function safe(what, fn){ try { fn(); } catch (e){ if (!failed[what]){ failed[what] = 1; console.error('dance.js ' + what + ':', e); } } }
 function tick(dt, keys){
   if (!G) return '';
-  updateMusic();
+  safe('music', updateMusic);
   if (me){
-    step();
-    if (me) broadcast();
+    safe('step', step);
+    if (me) safe('send', broadcast);
     if (me && me.ph === 'lobby'){ lobbyAcc += dt; if (lobbyAcc > 0.6){ lobbyAcc = 0; renderLobby(); } }
     if (me && me.ph === 'end'){ checkWin(); lobbyAcc += dt; if (lobbyAcc > 0.6 && !me.winDone){ lobbyAcc = 0; renderResults(); } }
   } else G.state.dd = null;
   help.style.display = me && (me.ph === 'count' || me.ph === 'play') && !isTouch() ? 'block' : 'none';
-  draw(dt);
+  safe('draw', () => draw(dt));
   // the mats light up under everyone's feet
-  const all = everyone();
-  for (let i = 0; i < 4; i++){ const e = all.find(x => (x.dd.p | 0) === i); drawMat(i, e ? (e.mine ? keyDown.reduce((a, d, l) => a | (d ? 1 << l : 0), 0) : e.dd.k | 0) : 0, !!e); }
-  drawTVs(dt);
+  safe('mats', () => { const all = everyone(); for (let i = 0; i < 4; i++){ const e = all.find(x => (x.dd.p | 0) === i); drawMat(i, e ? (e.mine ? keyDown.reduce((a, d, l) => a | (d ? 1 << l : 0), 0) : e.dd.k | 0) : 0, !!e); } });
+  safe('tv', () => drawTVs(dt));
   if (me || !G.state.started || G.controlLock) return '';
   const m = onMat(); if (!m) return '';
   return matTaken(m.i) ? 'This mat is taken' : (isTouch() ? 'Tap to ' : 'Press E to ') + 'dance 🕺';
@@ -625,11 +630,12 @@ function init(){
       const up = e => { e.preventDefault(); e.stopPropagation(); release(lane); b.style.background = 'rgba(20,24,30,.55)'; }; b.addEventListener('touchend', up); b.addEventListener('touchcancel', up); });
   }
   addEventListener('keydown', onKey, true); addEventListener('keyup', onKey, true);
-  addEventListener('blur', () => { keyDown = [false, false, false, false]; });
+  const letGo = () => { keyDown = [false, false, false, false]; };
+  addEventListener('blur', letGo); document.addEventListener('visibilitychange', () => { if (document.hidden) letGo(); });
   buildRoom();
   G.poseDancer = poseDancer;
   G.uses.unshift({tick, use});
 }
 
-window.DANCE = {get me(){ return me; }, chart, songs: SONGS, hit, release, start: startSong, sel};   // for testing in the console
+window.DANCE = {get me(){ return me; }, get listen(){ return listen; }, chart, songs: SONGS, hit, release, start: startSong, sel};   // for testing in the console
 if (window.GAME && window.GAME.uses) init(); else addEventListener('game-ready', init, {once: true});

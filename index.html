@@ -1432,7 +1432,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; pause();
 let started = !!window.__started, locked = false, paused = false, mouseIn = false, mx = 0.5;
 const pauseEl = document.getElementById('pause');
 function tryLock(){ if (isTouch || !canvas.requestPointerLock) return; try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
-function pause(){ if (!started || isTouch || paused) return; paused = true; for (const k in keys) keys[k] = false; pauseEl.style.display = 'flex'; if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); }
+function pause(){ if (!started || isTouch || paused) return; if (GAME.controlLock && GAME.controlLock.noPause){ for (const k in keys) keys[k] = false; return; } paused = true; for (const k in keys) keys[k] = false; pauseEl.style.display = 'flex'; if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); }   // dance.js: a song keeps going
 function resume(ev){ if (ev) ev.preventDefault(); paused = false; pauseEl.style.display = 'none'; tryLock(); }
 document.getElementById('resume').addEventListener('click', resume);
 canvas.addEventListener('mousedown', () => { if (started && !paused && !locked) tryLock(); });
