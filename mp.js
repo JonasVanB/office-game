@@ -198,7 +198,7 @@ async function main(){
   if (!LOCAL && !(hasMsal && hasFirebase)){ status('Multiplayer is not set up yet. You can walk around on your own.'); return; }
   ui.go.style.display = 'none';
   status('Connecting…');
-  try { [auth, net] = await Promise.all([LOCAL ? localAuth() : msalAuth(), LOCAL ? localNet() : firebaseNet()]); }
+  try { [auth, net] = await Promise.all([LOCAL ? localAuth() : msalAuth(), LOCAL ? localNet() : firebaseNet()]); window.__serverNow = net.now; }   // clock.js: same game time for everyone
   catch (e){ console.error(e); status('Could not connect to multiplayer. You can walk around on your own.'); ui.go.style.display = ''; return; }
 
   G = await whenGame();
