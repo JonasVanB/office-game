@@ -72,6 +72,8 @@ const burglarEvent = A => ({kind: 'burglar', A, dur: 120, icon: '🚨', title: '
   endIcon: '🚓', endTitle: 'The police caught the burglar', endSub: 'Nothing was stolen, except the Friday fries money'});
 const spookyEvent = A => ({kind: 'spooky', A, dur: 210, icon: '👻', title: 'The office is haunted tonight!', sub: 'Ghosts roam the 4e and the 3e. Don\'t get too close…',
   endIcon: '🌅', endTitle: 'The ghosts are gone… for now'});
+const powerEvent = A => ({kind: 'power', A, dur: 75, icon: '⚡', title: 'Power failure! The whole office is dark', sub: 'Press F for your flashlight. The emergency lights and the UPS keep the servers running', alert: true,
+  endIcon: '💡', endTitle: 'Power is back', endSub: 'The UPS held out. Someone should check the servers tomorrow'});
 function nightEvents(dayN){
   const R = rng(dayN*7919 + 13), B = dayN*1440 + 1020, ev = [];   // B = 17:00; +120 = 19:00, +420 = 00:00, +840 = 07:00
   const at = (a, b) => a + Math.floor(R()*(b - a));
@@ -87,6 +89,7 @@ function nightEvents(dayN){
   ev.push({kind: 'build', A: B + 540, dur: 25, icon: '🌙', title: `Nightly build #${build} started`, quiet: true});
   ev.push(R() < 0.8 ? {kind: 'buildok', A: B + 565, icon: '✅', title: `Nightly build #${build} succeeded`, quiet: true}
                     : {kind: 'buildfail', A: B + 565, icon: '❌', title: `Nightly build #${build} failed: ${2 + (R()*5 | 0)} tests red. Fun stand-up tomorrow`, quiet: true});
+  if (R() < 0.12) ev.push(powerEvent(B + at(200, 660)));   // last, so the other events of a night stay the same
   if (R() < 0.25) ev.push({kind: 'winupdate', A: B + 600, dur: 30, icon: '💻', title: 'Windows Update is restarting every PC (1 of 37)', quiet: true});
   return ev.map(e => Object.assign({dur: 0}, e));
 }
@@ -124,6 +127,7 @@ const CSS = `
 #clock .s{font-size:12px;opacity:.85;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #clock.alert{background:rgba(170,30,25,.85)}
 #clock.spooky{background:rgba(70,30,110,.85)}
+#clock.power{background:rgba(25,30,40,.92);box-shadow:0 0 0 2px #f2c230}
 #banner{position:fixed;top:64px;left:50%;transform:translate(-50%,-8px);background:rgba(20,24,30,.8);color:#fff;border-radius:12px;padding:10px 16px;font-size:15px;max-width:min(560px,86vw);text-align:center;opacity:0;transition:opacity .35s,transform .35s;pointer-events:none;z-index:3}
 #banner.on{opacity:1;transform:translate(-50%,0)}
 #banner.alert{background:rgba(170,30,25,.92);font-weight:600}
@@ -212,8 +216,8 @@ function drawTV(g, list, mode, server){
 }
 
 // ---------- the frame loop ----------
-let G = null, THREE = null, lastA = null, lastClock = '', sunCache = {t: -1}, Lcur = 1, flickerUntil = 0, wasLit = null;
-let prev = {x: 0, z: 0, zone: ''}, lastMove = 0, zoneChangeAt = -9, fx = null, spookNext = 0, spookSaid = null, phoneDone = new Set();
+let G = null, THREE = null, lastA = null, lastClock = '', sunCache = {t: -1}, Lcur = 1, flickerUntil = 0, wasLit = null, offSince = -99;
+let prev = {x: 0, z: 0, zone: ''}, lastMove = 0, fx = null, spookNext = 0, spookSaid = null, phoneDone = new Set();
 const C = (h) => new THREE.Color(h);
 let COL;
 
@@ -237,17 +241,30 @@ function tick(dt){
 
   const fire = activeOf(list, A, 'fire'), burglar = activeOf(list, A, 'burglar'), spooky = activeOf(list, A, 'spooky');
   const server = activeOf(list, A, 'server'), clean = activeOf(list, A, 'cleaners'), winupd = activeOf(list, A, 'winupdate'), build = activeOf(list, A, 'build');
+  const power = activeOf(list, A, 'power');
   const current = list.find(e => e.where && e.A <= A && A < e.A + e.dur);
 
-  // HUD clock
+  // ceiling lights: on 07:00 (4e) / 07:10 (3e) until 19:00. After that a motion sensor: they stay on while you move around
+  // and fade out after 60 s standing still. Always on during a fire or burglar alarm, off during a power failure.
+  const moved = Math.hypot(st.x - prev.x, st.z - prev.z) > 0.002; if (moved) lastMove = nowS; prev.x = st.x; prev.z = st.z;
+  const building = min >= (lv === 2 ? 430 : 420) && min < 1140, sensorOn = nowS - lastMove < 60;
+  const lit = !power && (building || !!fire || !!burglar || sensorOn);
+
+  // HUD clock: the line under the time always says what is going on, most important first
   let sub;
   const until = e => ' until ' + hhmm(e.A + e.dur);
   if (fire) sub = `🔥 Fire in ${fire.spot.name}`; else if (burglar) sub = '🚨 Burglar on the 4e' + until(burglar);
-  else if (spooky) sub = '👻 Haunted' + until(spooky); else if (server) sub = '🖥️ Server alert'; else if (current) sub = `${current.icon} ${current.title} · ${current.where}`;
-  else if (min < 420 || min >= 1140) sub = '🌙 Building closed';
+  else if (power) sub = '⚡ Power failure' + until(power) + ' · F: flashlight';
+  else if (spooky) sub = '👻 Haunted' + until(spooky) + ' · lights failing';
+  else if (server) sub = '🖥️ Server alert' + until(server);
+  else if (current) sub = `${current.icon} ${current.title} · ${current.where}`;
+  else if (winupd) sub = '💻 Windows Update is running';
+  else if (clean) sub = '🧹 Cleaners in' + until(clean);
+  else if (build) sub = '🌙 Nightly build running';
+  else if (min < 420 || min >= 1140) sub = lit ? '🌙 Closed · 💡 motion-sensor lights' : '🌙 Closed · 💡 lights off: walk to turn them on';
   else { const nx = list.filter(e => e.where && e.A > A && e.A < g.dayN*1440 + 1440).sort((a, b) => a.A - b.A)[0]; sub = nx ? `Next: ${nx.icon} ${nx.title} ${hhmm(nx.A)}` : (min >= 1020 ? '🏠 After hours' : ''); }
   const clockTxt = DAYS[g.wd] + ' ' + hhmm(min) + '|' + sub + '|' + (sound.muted ? 1 : 0) + '|' + !!(fire || burglar);
-  if (clockTxt !== lastClock){ lastClock = clockTxt; tEl.innerHTML = ''; tEl.append(DAYS[g.wd] + ' ' + hhmm(min)); const i = document.createElement('i'); i.textContent = sound.muted ? '🔇' : '🔈'; tEl.append(i); sEl.textContent = sub; clockEl.classList.toggle('alert', !!(fire || burglar)); clockEl.classList.toggle('spooky', !!spooky); }
+  if (clockTxt !== lastClock){ lastClock = clockTxt; tEl.innerHTML = ''; tEl.append(DAYS[g.wd] + ' ' + hhmm(min)); const i = document.createElement('i'); i.textContent = sound.muted ? '🔇' : '🔈'; tEl.append(i); sEl.textContent = sub; clockEl.classList.toggle('alert', !!(fire || burglar)); clockEl.classList.toggle('spooky', !!spooky); clockEl.classList.toggle('power', !!power && !fire && !burglar); }
   showBanners(nowS);
 
   // ---------- light ----------
@@ -258,15 +275,13 @@ function tick(dt){
   G.sun.intensity = 0.5*day; G.sun.color.copy(COL.sun).lerp(COL.sunLow, warm);
   G.sun.position.set(Math.sin(sunCache.az)*Math.cos(el*RAD)*30, Math.max(0.5, Math.sin(el*RAD)*30), -Math.cos(sunCache.az)*Math.cos(el*RAD)*30);
 
-  // ceiling lights: on 07:00 (4e) / 07:10 (3e) until 19:00, then motion sensor; always on during an alarm
-  const moved = Math.hypot(st.x - prev.x, st.z - prev.z) > 0.002; if (moved) lastMove = nowS;
-  if (st.zone !== prev.zone){ zoneChangeAt = nowS; prev.zone = st.zone; } prev.x = st.x; prev.z = st.z;
-  const building = min >= (lv === 2 ? 430 : 420) && min < 1140;
-  let lit = building || !!fire || !!burglar || (nowS - lastMove < 45 && nowS - zoneChangeAt > 0.6);
-  if (wasLit === false && lit) flickerUntil = nowS + 0.45; wasLit = lit;
+  // switching on after being off for a while: one short fluorescent-tube flicker (only then, so walking around never flickers)
+  if (lit && wasLit === false && nowS - offSince > 2) flickerUntil = nowS + 0.4;
+  if (!lit && wasLit !== false) offSince = nowS; wasLit = lit;
+  // haunted: the lights barely work and keep failing (the clock says so)
   if (spooky && lit && Math.random() < dt*0.6) flickerUntil = nowS + 0.25 + Math.random()*0.6;
-  let L = lit ? (spooky ? 0.2 : 1) : 0;   // haunted: the lights barely work
-  if (nowS < flickerUntil) Lcur = Math.random() < 0.5 ? 1 : 0.1; else Lcur += (L - Lcur)*Math.min(1, dt*10);
+  const L = lit ? (spooky ? 0.2 : 1) : 0;
+  if (nowS < flickerUntil) Lcur = Math.random() < 0.5 ? 1 : 0.1; else Lcur += (L - Lcur)*Math.min(1, dt*(L > Lcur ? 10 : 1.5));   // fade out slowly
   let hi = 0.07 + 0.35*day + 0.34*Lcur, ai = 0.035 + 0.135*day + 0.15*Lcur;
   G.hemi.color.copy(COL.moon).lerp(COL.white, Math.max(day, Lcur)); G.amb.color.copy(COL.white);
   if (fire){ const p = 0.5 + 0.5*Math.sin(nowS*7); G.amb.color.copy(COL.red); ai += 0.3*p; G.hemi.color.lerp(COL.red, 0.35*p); }
@@ -274,7 +289,7 @@ function tick(dt){
   G.hemi.intensity = hi; G.amb.intensity = ai;
   G.LIGHT.color.copy(COL.lampOff).lerp(COL.lampOn, Lcur);
   // PC screens: on during the working day, blue during the night-time Windows Update
-  const pcs = winupd ? COL.update : (min >= 470 && min < 1050) ? COL.pcOn : COL.black;
+  const pcs = power ? COL.black : winupd ? COL.update : (min >= 470 && min < 1050) ? COL.pcOn : COL.black;
   if (!G.SCREEN.emissive.equals(pcs)) G.SCREEN.emissive.copy(pcs);
   // the desk monitors show a work view while on, a blue update screen during Windows Update, and go dark otherwise
   const pcView = winupd ? COL.pcUpdate : pcs === COL.pcOn ? COL.pcView : COL.pcDark;
@@ -284,13 +299,13 @@ function tick(dt){
   for (const m of G.ENVMATS || []) m.envMapIntensity = m.userData.envBase*envK;
   // TVs: schedule while the building is open, red during a fire alarm, off otherwise
   // (fire: evacuation screen; server alert: the alert; spooky: static with a face now and then)
-  const tvMode = fire ? 'fire' : server ? 'server' : spooky ? 'spooky' : '';
-  const tvOn = !!tvMode || (min >= 420 && min < 1140);
+  const tvMode = fire ? 'fire' : power ? '' : server ? 'server' : spooky ? 'spooky' : '';
+  const tvOn = !!tvMode || (!power && min >= 420 && min < 1140);   // a power failure turns the TVs off
   const tvKey = tvMode === 'spooky' ? 'spooky' + Math.floor(nowS*8) : tvMode ? tvMode : tvOn ? hhmm(min) + g.wd : 'off';
   if (tvKey !== lastTV){ lastTV = tvKey; if (tvOn) drawTV(g, list, tvMode, server); G.TVSCREEN.color.copy(tvOn ? COL.white : COL.tvOff); }
 
   // the night events made visible: ghosts, fire and smoke, the burglar, the cleaner, the server beacon
-  fx.update(dt, {fire, burglar, spooky, server, clean, A, nowS, t: nowMs()/1000});
+  fx.update(dt, {fire, burglar, spooky, server, clean, power, lit: Lcur, A, nowS, t: nowMs()/1000});
 
   // ---------- sound ----------
   if (!sound.ready) return;
@@ -365,7 +380,7 @@ window.CLOCK = {
   trigger(kind, dur, spot = 0){ const g = gameTime(), A = g.A + 0.01;
     const e = {fire: () => fireEvent(A, FIRE_SPOTS[spot] || FIRE_SPOTS[0]), burglar: () => burglarEvent(A), spooky: () => spookyEvent(A), server: () => serverEvent(A, SERVER_ALERTS[0]),
       cleaners: () => ({kind, A, dur: 100, icon: '🧹', title: 'The cleaners are in', pos: CLEAN_SPOTS[spot] || CLEAN_SPOTS[0]}),
-      winupdate: () => ({kind, A, dur: 30, icon: '💻', title: 'Windows Update is restarting every PC (1 of 37)'})}[kind];
+      winupdate: () => ({kind, A, dur: 30, icon: '💻', title: 'Windows Update is restarting every PC (1 of 37)'}), power: () => powerEvent(A)}[kind];
     if (!e) return 'unknown event'; const ev = e(); if (dur) ev.dur = dur; extra.push(ev); return `${kind} until ${hhmm(ev.A + ev.dur)}`; },
   events(){ const g = gameTime(); return events(g.dayN).map(e => `${DAYS[((Math.floor(e.A/1440) % 5) + 5) % 5]} ${hhmm(e.A)} ${e.kind}${e.dur ? ' (' + e.dur + ' min)' : ''}`); },
 };
