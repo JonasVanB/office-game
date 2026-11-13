@@ -90,6 +90,14 @@ export const ACHIEVEMENTS = [
     ['wc_duel', '🤺', 'Urinal duel', 'Play a urinal duel against a colleague', 15],
     ['wc_duelwin', '🏆', 'Duel champion', 'Win a urinal duel', 30],
   ]),
+  ...A('Stiekem kussen', [
+    ['k_first', '💋', 'First kiss', 'Let the couple kiss in the Boekentoren', 10],
+    ['k_caught', '😳', 'Caught red-lipped', 'Get caught kissing', 5],
+    ['k_clean', '🤫', 'Not a soul saw it', 'Clear a level without getting caught', 25],
+    ['k_l3', '🚪', 'Getting bold', 'Reach level 3 (the boss peeks in)', 20],
+    ['k_l5', '🔥', 'Office romance', 'Reach level 5', 40],
+    ['k_all', '💍', 'True love', 'Clear all 5 levels', 80],
+  ]),
   ...A('Night', [
     ['n_boo', '👻', 'Boo!', 'Get scared by a ghost', 20],
     ['n_boo5', '😱', 'Scaredy-cat', 'Get scared by ghosts 5 times', 30, {stat: 'boo', n: 5}],
