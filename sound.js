@@ -88,17 +88,28 @@ const FX = {
     const g = ctx.createGain(); g.connect(d); env(g, t + 0.1, 0.1, 0.4, 0.2, 0.05*v); noise(g, t + 0.1, 0.8, 'lowpass', 350); },
   // mouse clicks
   mouse(v, pan){ const d = out(pan); let t = ctx.currentTime; for (let i = 0; i < 1 + (Math.random()*3 | 0); i++){ const g = ctx.createGain(); g.connect(d); env(g, t, 0.001, 0.004, 0.01, 0.1*v); noise(g, t, 0.03, 'highpass', 3500); t += 0.12 + Math.random()*0.3; } },
+  // ghost: a long wavering "oooOOOooo" that swoops down
+  boo(v, pan){ const d = out(pan), t = ctx.currentTime, lp = ctx.createBiquadFilter(); lp.type = 'bandpass'; lp.frequency.value = 400; lp.Q.value = 3; lp.connect(d);
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sawtooth'; o.connect(g); g.connect(lp);
+    o.frequency.setValueAtTime(380, t); o.frequency.linearRampToValueAtTime(520, t + 0.5); o.frequency.exponentialRampToValueAtTime(160, t + 1.8);
+    const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 6; vg.gain.value = 18; vib.connect(vg); vg.connect(o.frequency); vib.start(t); vib.stop(t + 2);
+    env(g, t, 0.25, 1.1, 0.6, 0.5*v); o.start(t); o.stop(t + 2.1);
+    const w = ctx.createGain(); w.connect(d); env(w, t, 0.3, 1, 0.6, 0.12*v); noise(w, t, 2, 'bandpass', 900, 2); },
+  // evil laugh, low and slow
+  cackle(v, pan){ talk(v, pan, 7, true, 90); },
+  // someone running away
+  run(v, pan){ const d = out(pan); let t = ctx.currentTime; for (let i = 0; i < 10; i++){ const g = ctx.createGain(); g.connect(d); env(g, t, 0.003, 0.02, 0.08, 0.35*v*(1 - i/12)); noise(g, t, 0.15, 'lowpass', 700); t += 0.27; } },
   // a soft "pop" when a chat message appears
   pop(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 0.12, 600, 'sine', 0.12*v); o.frequency.exponentialRampToValueAtTime(1100, t + 0.08); },
   // building creak at night
   creak(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 1.2, 70, 'sawtooth', 0.05*v, 0.3); o.frequency.linearRampToValueAtTime(55, t + 1.2); },
 };
 const VOWELS = [[730, 1090], [270, 2290], [530, 1840], [300, 870], [570, 840], [440, 1020], [660, 1720], [390, 1990]];
-function talk(v, pan, n, laugh){
+function talk(v, pan, n, laugh, pitch){
   const d = out(pan), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1300; lp.connect(d);
   const o = ctx.createOscillator(); o.type = 'sawtooth'; const g = ctx.createGain(); g.gain.value = 0; g.connect(lp);
   const f1 = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter(); for (const f of [f1, f2]){ f.type = 'bandpass'; f.Q.value = 7; o.connect(f); f.connect(g); }
-  const t0 = ctx.currentTime + 0.02, base = (Math.random() < 0.5 ? 105 : 190) + Math.random()*40; let t = t0;
+  const t0 = ctx.currentTime + 0.02, base = pitch || (Math.random() < 0.5 ? 105 : 190) + Math.random()*40; let t = t0;
   for (let i = 0; i < n; i++){
     const [a, b] = laugh ? [700, 1220] : VOWELS[Math.random()*VOWELS.length | 0], dur = laugh ? 0.11 : 0.1 + Math.random()*0.17;
     f1.frequency.setTargetAtTime(a, t, 0.02); f2.frequency.setTargetAtTime(b, t, 0.02);
@@ -111,13 +122,19 @@ function talk(v, pan, n, laugh){
 export function play(name, vol = 1, pan = 0, arg){ if (!ctx || vol < 0.01 || !FX[name]) return; try { FX[name](Math.min(1, vol), pan, arg); } catch (e) {} }
 
 // ---------- loops whose volume and pan are set every frame ----------
-// kinds: server (fans), vacuum, fire (alarm), siren (burglar)
+// kinds: haunt (spooky drone), crackle (flames), server (fans), vacuum, fire (alarm), siren (burglar)
 const loops = {};
 function makeLoop(kind){
   const g = ctx.createGain(); g.gain.value = 0; const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
   if (p){ g.connect(p); p.connect(master); } else g.connect(master);
   const t = ctx.currentTime, BIG = 1e7;
-  if (kind === 'server'){ noise(g, t, BIG, 'bandpass', 700, 0.7); for (const f of [120, 240]){ const o = ctx.createOscillator(); o.frequency.value = f; const og = ctx.createGain(); og.gain.value = 0.15; o.connect(og); og.connect(g); o.start(); } }
+  if (kind === 'haunt'){ // spooky night: a low, beating drone and a cold wind
+    for (const f of [55, 58.5, 110.7]){ const o = ctx.createOscillator(); o.frequency.value = f; const og = ctx.createGain(); og.gain.value = f > 100 ? 0.05 : 0.18; o.connect(og); og.connect(g); o.start(); }
+    const w = noise(g, t, BIG, 'bandpass', 450, 1.5); const l = ctx.createOscillator(); l.frequency.value = 0.13; const lg = ctx.createGain(); lg.gain.value = 250; l.connect(lg); lg.connect(w.f.frequency); l.start(); }
+  else if (kind === 'crackle'){ // fire: roar plus crackling pops
+    noise(g, t, BIG, 'lowpass', 500); const pops = ctx.createGain(); pops.gain.value = 0; pops.connect(g); noise(pops, t, BIG, 'highpass', 2500);
+    const am = noise(pops.gain, t, BIG, 'lowpass', 25); am.f.Q.value = 0.3; }
+  else if (kind === 'server'){ noise(g, t, BIG, 'bandpass', 700, 0.7); for (const f of [120, 240]){ const o = ctx.createOscillator(); o.frequency.value = f; const og = ctx.createGain(); og.gain.value = 0.15; o.connect(og); og.connect(g); o.start(); } }
   else if (kind === 'vacuum'){ noise(g, t, BIG, 'bandpass', 1100, 0.9); const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 180; const og = ctx.createGain(); og.gain.value = 0.08; o.connect(og); og.connect(g); o.start(); }
   else if (kind === 'fire'){ // classic two-tone alarm bell
     const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 800; const og = ctx.createGain(); og.gain.value = 0.25; o.connect(og); og.connect(g); o.start();

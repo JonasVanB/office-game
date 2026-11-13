@@ -57,11 +57,11 @@ Nothing yet
 | ----------- | --------------------------- | ---------------------------------- | ----- |
 | 17:00–19:00 | Some people stay late       | always                             |       |
 | 19:00       | Alarm armed, lights off     | always                             |       |
-| Night       | Fire alarm                  | rare                               |       |
-| Night       | Spooky event                | rare                               |       |
-| Night       | Burglar alarm               | rare                               |       |
-| Night       | Server room alert / on-call | sometimes                          | 12 IT alerts, e.g. "Disk C: on SQL-PROD-01 is 96% full"; red lamp blinks above the server door, beeps |
-| 17:30–19:00 | Cleaners vacuuming *(added by Claude)* | sometimes (70%)         | Vacuum sound moving around one area |
+| 21:00–03:40 | Fire alarm                  | rare (7%)                          | ~2 real minutes |
+| 22:30–00:30 | Spooky night                | sometimes (15%)                    | ~3.5 real minutes |
+| 22:00–03:40 | Burglar alarm               | rare (8%)                          | ~2 real minutes |
+| 20:00–04:40 | Server room alert / on-call | sometimes (35%)                    | 12 IT alerts, e.g. "Disk C: on SQL-PROD-01 is 96% full" |
+| 17:20–19:00 | Cleaners *(added by Claude)* | often (70%)                       | A cleaner walks around one area with a vacuum; a cart with a bucket and mop |
 | 18:00–23:00 | A Teams call rings at an empty desk *(added)* | sometimes (40%)  | Sound only |
 | 02:00       | Nightly build *(added)*     | always                             | Banner, server fans louder; at 02:25 succeeded (80%) or "failed: 4 tests red. Fun stand-up tomorrow" |
 | 03:00       | Windows Update restarts every PC *(added)* | sometimes (25%)     | All monitors glow blue for half an hour |
@@ -70,9 +70,12 @@ Nothing yet
 
 Only one of fire / burglar / spooky can happen per night. Everything is random but the same for every player (seeded by the game day).
 
-- **Fire alarm:** two-tone alarm everywhere, red pulsing light, all TVs turn red with "Leave the building via the stairs".
-- **Burglar alarm:** siren, lights flash red/blue.
-- **Spooky:** lights flicker, whispers, footsteps, creaks, the printer prints one page by itself, a door near you opens or slams shut. Banner: "👻 Did you hear that?"
+Every big event has a clear start banner (what and where), a line under the clock while it lasts, and an ending banner. The ghosts, the burglar and the cleaner are in the same place for every player; only the scares are per player.
+
+- **Spooky night** 👻: "The office is haunted tonight!". Four glowing sheet ghosts float along the Landscape, the meeting corridor, the Stille ruimte corridor and the 3e corridor, through doors and walls. Come within 2 m and the ghost rushes at you with a moan and vanishes, coming back 10 s later. The office turns dark and cold blue with purple fog, the lights barely work and keep flickering, TVs show static with a ghost face now and then, a low drone and wind play, plus whispers, footsteps, creaks, evil laughs, the printer printing by itself and doors opening or slamming by themselves (for everyone). The clock turns purple: "👻 Haunted until 02:30". Ends with "🌅 The ghosts are gone… for now".
+- **Fire** 🔥: starts in one of three places, each with a cause: the printer in the Print room, the toaster in the 4e kitchen or the coffee machine in the 3e kitchen. Flames, embers and an orange glow; black smoke rises to the ceiling and spreads; the floor fills with smoke (thicker the closer you are); crackling; red flashing beacons near the exits; two-tone alarm; red pulsing light; TVs show "FIRE ALARM". Getting close gives "It's getting really hot here. Get out!". After about 2 minutes: "🚒 The fire brigade put out the fire".
+- **Burglar** 🚨: a burglar in black with a beanie, a mask, a loot sack and a flashlight (beam on the floor) sneaks up and down the 4e. Get within 4.5 m and he runs off ("The burglar spotted you and ran off!"). Siren, red/blue flashing beacons. Ends with "🚓 The police caught the burglar".
+- **Server room alert** 🖥️: a rotating red beacon above the server room door, a red glow in the server room, beeps, and all TVs show the alert. Ends with "✅ Server alert resolved".
 
 ## 7. Light and atmosphere
 
@@ -105,4 +108,4 @@ Later, once NPCs exist:
 
 ## Testing the clock
 
-Add to the address: `?t=vr-08:55` jumps to that game time, `?speed=20` runs the clock 20× faster (only in your own browser). In the browser console: `CLOCK.trigger('fire')` (or `burglar`, `spooky`, `server`, `cleaners`, `winupdate`) starts an event now, and `CLOCK.events()` lists today's and tonight's events.
+Add to the address: `?t=vr-08:55` jumps to that game time, `?speed=20` runs the clock 20× faster (only in your own browser). In the browser console: `CLOCK.trigger('fire')` (or `burglar`, `spooky`, `server`, `cleaners`, `winupdate`) starts an event now, and `CLOCK.events()` lists today's and tonight's events. Best at night: `?t=ma-23:00`. `CLOCK.trigger('fire', 120, 1)` picks the fire spot (0 Print room, 1 4e kitchen, 2 3e kitchen).

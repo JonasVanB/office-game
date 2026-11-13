@@ -2,6 +2,7 @@
 // because it is computed from the (server) time. Drives the HUD clock, announcements, daylight, ceiling lights,
 // the week schedule on the TVs, office sounds and the after-hours events. Settings come from clock.md.
 import {sound, play, loop, spatial} from './sound.js';
+import {createFX} from './fx.js';
 
 // ---------- time ----------
 // day 07:00–17:00: 5 real minutes per game hour; night 17:00–07:00: 1 real minute per game hour → 64 real minutes per game day
@@ -29,7 +30,7 @@ const P = {
   server: {x: 26.7, z: 10.3, lv: 0}, printer: {x: 16.6, z: 8.8, lv: 0},
 };
 const DESKS = [[0, 14, 0, 13, 0], [14, 28, 0, 5.3, 0], [39, 50, 0, 5.3, 0], [42, 50, 4.8, 13, 2]];   // x0 x1 z0 z1 level: where people type
-const CLEAN_SPOTS = [{x: 7, z: 6.5, lv: 0}, {x: 44, z: 3, lv: 0}, {x: 21, z: 6.5, lv: 0}, {x: 46, z: 9, lv: 2}];
+const CLEAN_SPOTS = [{x: 7, z: 7, lv: 0, xa: 4, za: 2.5}, {x: 44, z: 2.8, lv: 0, xa: 3.5, za: 1.2}, {x: 21, z: 6.5, lv: 0, xa: 5, za: 0.5}, {x: 46, z: 9.5, lv: 2, xa: 3, za: 1.5}];   // xa/za: how far the cleaner walks around
 const SERVER_ALERTS = [
   'Disk C: on SQL-PROD-01 is 96% full', 'Backup job "Nightly full" failed on SQL-PROD-02', 'Azure DevOps: 0 of 3 build agents online',
   'CPU at 99% on APP-02 for 10 minutes', 'The API gateway certificate expires in 3 days', 'UPS switched to battery power',
@@ -57,16 +58,31 @@ function dayEvents(dayN){
   return ev.map(e => Object.assign(e, {A: B + e.from, dur: e.to ? e.to - e.from : 0}));
 }
 // the night after day dayN (17:00 → 07:00 next morning); the same random events for everyone
+// the big night events: what they look like is in fx.js
+const FIRE_SPOTS = [
+  {x: 16.6, z: 8.8, lv: 0, y: 1.08, name: 'the Print room', cause: 'The printer caught fire'},
+  {x: 39.4, z: 11.2, lv: 0, y: 0.94, name: 'the kitchen', cause: 'Someone left the toaster on'},
+  {x: 35.3, z: 12.15, lv: 2, y: 0.94, name: 'the 3e kitchen', cause: 'The coffee machine overheated'},
+];
+const serverEvent = (A, msg) => ({kind: 'server', A, dur: 90, icon: '🖥️', title: 'Server room alert: ' + msg, sub: 'Red light above the server room door', alert: true, msg,
+  endIcon: '✅', endTitle: 'Server alert resolved. Someone from on-call fixed it remotely'});
+const fireEvent = (A, spot) => ({kind: 'fire', A, dur: 120, icon: '🔥', title: `Fire in ${spot.name}! Leave the building via the stairs`, sub: `${spot.cause}. Do not use the lifts`, alert: true, spot,
+  endIcon: '🚒', endTitle: 'The fire brigade put out the fire', endSub: 'Everyone is safe. Somebody will have to explain this tomorrow'});
+const burglarEvent = A => ({kind: 'burglar', A, dur: 120, icon: '🚨', title: 'Burglar alarm! There is a burglar on the 4e', sub: 'Find him and he runs. Security is on the way', alert: true,
+  endIcon: '🚓', endTitle: 'The police caught the burglar', endSub: 'Nothing was stolen, except the Friday fries money'});
+const spookyEvent = A => ({kind: 'spooky', A, dur: 210, icon: '👻', title: 'The office is haunted tonight!', sub: 'Ghosts roam the 4e and the 3e. Don\'t get too close…',
+  endIcon: '🌅', endTitle: 'The ghosts are gone… for now'});
 function nightEvents(dayN){
   const R = rng(dayN*7919 + 13), B = dayN*1440 + 1020, ev = [];   // B = 17:00; +120 = 19:00, +420 = 00:00, +840 = 07:00
   const at = (a, b) => a + Math.floor(R()*(b - a));
-  if (R() < 0.7){ const s = at(30, 60); ev.push({kind: 'cleaners', A: B + s, dur: 80, icon: '🧹', title: 'The cleaners are in', pos: CLEAN_SPOTS[R()*CLEAN_SPOTS.length | 0], quiet: true}); }
+  // at night 1 game minute = 1 real second, so dur 120 ≈ 2 real minutes
+  if (R() < 0.7){ const s = at(20, 40); ev.push({kind: 'cleaners', A: B + s, dur: 100, icon: '🧹', title: 'The cleaners are in', pos: CLEAN_SPOTS[R()*CLEAN_SPOTS.length | 0], quiet: true}); }
   if (R() < 0.4) ev.push({kind: 'phone', A: B + at(60, 360), dur: 1, desk: DESKS[R()*DESKS.length | 0], u: R(), v: R()});
-  if (R() < 0.35) ev.push({kind: 'server', A: B + at(180, 720), dur: 50, icon: '🖥️', title: 'Server room alert: ' + SERVER_ALERTS[R()*SERVER_ALERTS.length | 0], alert: true});
+  if (R() < 0.35) ev.push(serverEvent(B + at(180, 700), SERVER_ALERTS[R()*SERVER_ALERTS.length | 0]));
   const big = R();
-  if (big < 0.05) ev.push({kind: 'fire', A: B + at(240, 660), dur: 45, icon: '🔥', title: 'Fire alarm! Leave the building via the stairs. Do not use the lifts', alert: true});
-  else if (big < 0.10) ev.push({kind: 'burglar', A: B + at(300, 660), dur: 40, icon: '🚨', title: 'Burglar alarm! Motion detected inside. Security is on the way', alert: true});
-  else if (big < 0.17) ev.push({kind: 'spooky', A: B + at(360, 600), dur: 90});
+  if (big < 0.07) ev.push(fireEvent(B + at(240, 640), FIRE_SPOTS[R()*FIRE_SPOTS.length | 0]));
+  else if (big < 0.15) ev.push(burglarEvent(B + at(300, 640)));
+  else if (big < 0.30) ev.push(spookyEvent(B + at(330, 450)));
   const build = 1000 + dayN % 9000;
   ev.push({kind: 'build', A: B + 540, dur: 25, icon: '🌙', title: `Nightly build #${build} started`, quiet: true});
   ev.push(R() < 0.8 ? {kind: 'buildok', A: B + 565, icon: '✅', title: `Nightly build #${build} succeeded`, quiet: true}
@@ -107,6 +123,7 @@ const CSS = `
 #clock .t i{font-style:normal;font-size:13px;opacity:.8;margin-left:6px}
 #clock .s{font-size:12px;opacity:.85;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #clock.alert{background:rgba(170,30,25,.85)}
+#clock.spooky{background:rgba(70,30,110,.85)}
 #banner{position:fixed;top:64px;left:50%;transform:translate(-50%,-8px);background:rgba(20,24,30,.8);color:#fff;border-radius:12px;padding:10px 16px;font-size:15px;max-width:min(560px,86vw);text-align:center;opacity:0;transition:opacity .35s,transform .35s;pointer-events:none;z-index:3}
 #banner.on{opacity:1;transform:translate(-50%,0)}
 #banner.alert{background:rgba(170,30,25,.92);font-weight:600}
@@ -144,12 +161,20 @@ function showBanners(nowS){
 
 // ---------- TV screens: the week schedule ----------
 let tvCanvas, tvCtx, tvTex, lastTV = '';
-function drawTV(g, list, mode){
+function drawTV(g, list, mode, server){
   const c = tvCtx, W = 1024, H = 576; c.save();
-  if (mode === 'fire'){
-    c.fillStyle = '#b3201b'; c.fillRect(0, 0, W, H); c.fillStyle = '#fff'; c.textAlign = 'center';
-    c.font = '700 92px system-ui,Segoe UI,sans-serif'; c.fillText('🔥 FIRE ALARM', W/2, 240);
-    c.font = '500 40px system-ui,Segoe UI,sans-serif'; c.fillText('Leave the building via the stairs', W/2, 330); c.fillText('Do not use the lifts', W/2, 390);
+  const big = (bg, lines) => { c.fillStyle = bg; c.fillRect(0, 0, W, H); c.fillStyle = '#fff'; c.textAlign = 'center';
+    lines.forEach(([t, f, y]) => { c.font = f + ' system-ui,Segoe UI,Segoe UI Emoji,sans-serif'; c.fillText(t, W/2, y); }); c.restore(); tvTex.needsUpdate = true; };
+  if (mode === 'fire') return big('#b3201b', [['🔥 FIRE ALARM', '700 92px', 240], ['Leave the building via the stairs', '500 40px', 330], ['Do not use the lifts', '500 40px', 390]]);
+  if (mode === 'server') return big('#3a0d0d', [['🖥️ SERVER ALERT', '700 80px', 200], [server ? server.msg : '', '500 36px', 300], ['Monitoring · ' + DAYS_FULL[g.wd] + ' ' + hhmm(g.min), '400 28px', 420]]);
+  if (mode === 'spooky'){
+    // TV static, and every few seconds a ghost face
+    const img = c.createImageData(256, 144), d = img.data; for (let i = 0; i < d.length; i += 4){ const v = Math.random()*200 | 0; d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255; }
+    const tmp = document.createElement('canvas'); tmp.width = 256; tmp.height = 144; tmp.getContext('2d').putImageData(img, 0, 0);
+    c.imageSmoothingEnabled = false; c.drawImage(tmp, 0, 0, W, H);
+    if (Math.random() < 0.2){ c.fillStyle = 'rgba(230,240,255,.85)'; c.beginPath(); c.ellipse(W/2, H/2, 150, 190, 0, 0, Math.PI*2); c.fill();
+      c.fillStyle = '#000'; for (const dx of [-55, 55]){ c.beginPath(); c.ellipse(W/2 + dx, H/2 - 40, 26, 40, 0, 0, Math.PI*2); c.fill(); }
+      c.beginPath(); c.ellipse(W/2, H/2 + 70, 34, 50, 0, 0, Math.PI*2); c.fill(); }
     c.restore(); tvTex.needsUpdate = true; return;
   }
   const gr = c.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#16294a'); gr.addColorStop(1, '#0c1628'); c.fillStyle = gr; c.fillRect(0, 0, W, H);
@@ -188,7 +213,7 @@ function drawTV(g, list, mode){
 
 // ---------- the frame loop ----------
 let G = null, THREE = null, lastA = null, lastClock = '', sunCache = {t: -1}, Lcur = 1, flickerUntil = 0, wasLit = null;
-let prev = {x: 0, z: 0, zone: ''}, lastMove = 0, zoneChangeAt = -9, blinker = null, spookNext = 0, spookSaid = null, phoneDone = new Set();
+let prev = {x: 0, z: 0, zone: ''}, lastMove = 0, zoneChangeAt = -9, fx = null, spookNext = 0, spookSaid = null, phoneDone = new Set();
 const C = (h) => new THREE.Color(h);
 let COL;
 
@@ -201,9 +226,10 @@ function tick(dt){
     for (const e of list){
       if (e.where && e.A - 5 > lastA && e.A - 5 <= A) announce(e.icon, `${e.title} in 5 minutes`, e.where);
       if (e.title && e.A > lastA && e.A <= A){
-        announce(e.icon, e.title, e.where || '', e.alert);
+        announce(e.icon, e.title, e.sub || e.where || '', e.alert);
         if (e.bell && sound.ready) play('chime', 0.8);
       }
+      if (e.endTitle && e.A + e.dur > lastA && e.A + e.dur <= A) announce(e.endIcon, e.endTitle, e.endSub || '', false);
       if (e.kind === 'phone' && e.A > lastA && e.A <= A){ const d = e.desk, s = spatial(d[0] + (d[1] - d[0])*e.u, d[2] + (d[3] - d[2])*e.v, d[4], 22); play('phone', s.g, s.p); }
     }
   }
@@ -215,11 +241,13 @@ function tick(dt){
 
   // HUD clock
   let sub;
-  if (fire) sub = '🔥 Fire alarm'; else if (burglar) sub = '🚨 Burglar alarm'; else if (current) sub = `${current.icon} ${current.title} · ${current.where}`;
+  const until = e => ' until ' + hhmm(e.A + e.dur);
+  if (fire) sub = `🔥 Fire in ${fire.spot.name}`; else if (burglar) sub = '🚨 Burglar on the 4e' + until(burglar);
+  else if (spooky) sub = '👻 Haunted' + until(spooky); else if (server) sub = '🖥️ Server alert'; else if (current) sub = `${current.icon} ${current.title} · ${current.where}`;
   else if (min < 420 || min >= 1140) sub = '🌙 Building closed';
   else { const nx = list.filter(e => e.where && e.A > A && e.A < g.dayN*1440 + 1440).sort((a, b) => a.A - b.A)[0]; sub = nx ? `Next: ${nx.icon} ${nx.title} ${hhmm(nx.A)}` : (min >= 1020 ? '🏠 After hours' : ''); }
   const clockTxt = DAYS[g.wd] + ' ' + hhmm(min) + '|' + sub + '|' + (sound.muted ? 1 : 0) + '|' + !!(fire || burglar);
-  if (clockTxt !== lastClock){ lastClock = clockTxt; tEl.innerHTML = ''; tEl.append(DAYS[g.wd] + ' ' + hhmm(min)); const i = document.createElement('i'); i.textContent = sound.muted ? '🔇' : '🔈'; tEl.append(i); sEl.textContent = sub; clockEl.classList.toggle('alert', !!(fire || burglar)); }
+  if (clockTxt !== lastClock){ lastClock = clockTxt; tEl.innerHTML = ''; tEl.append(DAYS[g.wd] + ' ' + hhmm(min)); const i = document.createElement('i'); i.textContent = sound.muted ? '🔇' : '🔈'; tEl.append(i); sEl.textContent = sub; clockEl.classList.toggle('alert', !!(fire || burglar)); clockEl.classList.toggle('spooky', !!spooky); }
   showBanners(nowS);
 
   // ---------- light ----------
@@ -236,8 +264,8 @@ function tick(dt){
   const building = min >= (lv === 2 ? 430 : 420) && min < 1140;
   let lit = building || !!fire || !!burglar || (nowS - lastMove < 45 && nowS - zoneChangeAt > 0.6);
   if (wasLit === false && lit) flickerUntil = nowS + 0.45; wasLit = lit;
-  if (spooky && lit && Math.random() < dt*0.35) flickerUntil = nowS + 0.25 + Math.random()*0.5;
-  let L = lit ? 1 : 0;
+  if (spooky && lit && Math.random() < dt*0.6) flickerUntil = nowS + 0.25 + Math.random()*0.6;
+  let L = lit ? (spooky ? 0.2 : 1) : 0;   // haunted: the lights barely work
   if (nowS < flickerUntil) Lcur = Math.random() < 0.5 ? 1 : 0.1; else Lcur += (L - Lcur)*Math.min(1, dt*10);
   let hi = 0.07 + 0.35*day + 0.34*Lcur, ai = 0.035 + 0.135*day + 0.15*Lcur;
   G.hemi.color.copy(COL.moon).lerp(COL.white, Math.max(day, Lcur)); G.amb.color.copy(COL.white);
@@ -255,9 +283,14 @@ function tick(dt){
   const envK = 0.15 + 0.85*Math.max(day, Lcur);
   for (const m of G.ENVMATS || []) m.envMapIntensity = m.userData.envBase*envK;
   // TVs: schedule while the building is open, red during a fire alarm, off otherwise
-  const tvOn = fire || (min >= 420 && min < 1140), tvKey = fire ? 'fire' : tvOn ? hhmm(min) + g.wd : 'off';
-  if (tvKey !== lastTV){ lastTV = tvKey; if (tvOn) drawTV(g, list, fire ? 'fire' : ''); G.TVSCREEN.color.copy(tvOn ? COL.white : COL.tvOff); }
-  if (blinker) blinker.visible = !!server && Math.floor(nowS*2) % 2 === 0;
+  // (fire: evacuation screen; server alert: the alert; spooky: static with a face now and then)
+  const tvMode = fire ? 'fire' : server ? 'server' : spooky ? 'spooky' : '';
+  const tvOn = !!tvMode || (min >= 420 && min < 1140);
+  const tvKey = tvMode === 'spooky' ? 'spooky' + Math.floor(nowS*8) : tvMode ? tvMode : tvOn ? hhmm(min) + g.wd : 'off';
+  if (tvKey !== lastTV){ lastTV = tvKey; if (tvOn) drawTV(g, list, tvMode, server); G.TVSCREEN.color.copy(tvOn ? COL.white : COL.tvOff); }
+
+  // the night events made visible: ghosts, fire and smoke, the burglar, the cleaner, the server beacon
+  fx.update(dt, {fire, burglar, spooky, server, clean, A, nowS, t: nowMs()/1000});
 
   // ---------- sound ----------
   if (!sound.ready) return;
@@ -270,7 +303,7 @@ function tick(dt){
     return spatial(Math.max(d[0], Math.min(d[1], st.x + (Math.random() - 0.5)*14)), Math.max(d[2], Math.min(d[3], st.z + (Math.random() - 0.5)*10)), d[4], 14); };
   const at = (fx, vol, p) => { const s = p ? near(p, 14) : deskSpot(); if (s.g > 0.01) play(fx, s.g*vol, s.p); };
   { const s = near(P.server, 7); loop('server', s.g*(build ? 0.3 : 0.16), s.p); }
-  if (clean){ const t = nowS*0.15, x = clean.pos.x + Math.sin(t)*4, s = spatial(x, clean.pos.z + Math.cos(t*1.3)*2, clean.pos.lv, 18); loop('vacuum', s.g*0.18, s.p); } else loop('vacuum', 0);
+  // (the cleaner's vacuum sound comes from fx.js, where the cleaner walks)
   loop('fire', fire ? (lv === 0 ? 0.45 : 0.32) : 0); loop('siren', burglar ? 0.35 : 0);
   const chance = rate => Math.random() < dt*rate;
   // working: typing, clicking, chairs, mugs, colleagues talking and the odd laugh
@@ -290,8 +323,7 @@ function tick(dt){
   if (server && chance(1/3)){ const s = near(P.server, 16); play('beep', s.g, s.p); }
   if (occ === 0 && !spooky && chance(1/40)) play('creak', 0.5, Math.random()*2 - 1);
   if (spooky && nowS > spookNext){
-    spookNext = nowS + 5 + Math.random()*7; const r = Math.random(), pan = Math.random()*2 - 1;
-    if (spookSaid !== spooky.A){ spookSaid = spooky.A; announce('👻', 'Did you hear that?', '', false); }
+    spookNext = nowS + 4 + Math.random()*6; const r = Math.random(), pan = Math.random()*2 - 1;
     if (r < 0.3) play('whisper', 0.8, pan); else if (r < 0.5) play('steps', 0.8, pan); else if (r < 0.65) play('creak', 0.8, pan);
     else if (r < 0.8){ const s = near(P.printer, 18); if (s.g > 0.05) play('printer', s.g, s.p, 1); else play('whisper', 0.6, pan); }
     else spookDoor(st);
@@ -317,20 +349,22 @@ function init(){
   G.TVSCREEN.map = tvTex; G.TVSCREEN.needsUpdate = true;
   G.SCREEN.emissive = G.SCREEN.emissive || C(0);
   // red alert lamp above the server room door
-  blinker = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.04), new THREE.MeshBasicMaterial({color: 0xff2020})); blinker.position.set(27.47, 2.12, 7.6); blinker.visible = false; G.scene.add(blinker);
+  fx = createFX(G, announce);
   hud(); window.__onFrameClock = dt => { try { tick(dt); } catch (e) { console.error(e); window.__onFrameClock = null; } };
 }
 
 // test helpers (only change this browser): ?t=vr-08:55 jumps to that game time, ?speed=20 runs the clock 20× faster,
-// CLOCK.trigger('fire' | 'burglar' | 'spooky' | 'server' | 'cleaners' | 'winupdate') starts an after-hours event now
+// CLOCK.trigger('fire' | 'burglar' | 'spooky' | 'server' | 'cleaners' | 'winupdate') starts an after-hours event now (best at night: ?t=ma-22:00)
 window.CLOCK = {
   now(){ const g = gameTime(); return DAYS[g.wd] + ' ' + hhmm(g.min); }, set: setTime,
   play(name){ sound.unlock(); play(name, 1, 0); },
   speed(n){ const real = window.__serverNow ? window.__serverNow() : Date.now(); offset += (speedBase + (real - speedBase)*speed) - real; speedBase = real; speed = +n || 1; },
-  trigger(kind, dur = 40){ const g = gameTime(), demo = nightEvents(g.dayN).find(e => e.kind === kind) || {};
-    const base = {fire: {icon: '🔥', title: 'Fire alarm! Leave the building via the stairs. Do not use the lifts', alert: true}, burglar: {icon: '🚨', title: 'Burglar alarm! Motion detected inside. Security is on the way', alert: true},
-      server: {icon: '🖥️', title: 'Server room alert: ' + SERVER_ALERTS[0], alert: true}, cleaners: {icon: '🧹', title: 'The cleaners are in', pos: CLEAN_SPOTS[0], quiet: true}, winupdate: {icon: '💻', title: 'Windows Update is restarting every PC (1 of 37)'}}[kind] || {};
-    extra.push(Object.assign({}, demo, base, {kind, A: g.A + 0.01, dur})); },
+  // CLOCK.trigger('fire', 120, 1) → fire in the 4e kitchen; the third value picks the fire spot (0 Print room, 1 kitchen, 2 3e kitchen)
+  trigger(kind, dur, spot = 0){ const g = gameTime(), A = g.A + 0.01;
+    const e = {fire: () => fireEvent(A, FIRE_SPOTS[spot] || FIRE_SPOTS[0]), burglar: () => burglarEvent(A), spooky: () => spookyEvent(A), server: () => serverEvent(A, SERVER_ALERTS[0]),
+      cleaners: () => ({kind, A, dur: 100, icon: '🧹', title: 'The cleaners are in', pos: CLEAN_SPOTS[spot] || CLEAN_SPOTS[0]}),
+      winupdate: () => ({kind, A, dur: 30, icon: '💻', title: 'Windows Update is restarting every PC (1 of 37)'})}[kind];
+    if (!e) return 'unknown event'; const ev = e(); if (dur) ev.dur = dur; extra.push(ev); return `${kind} until ${hhmm(ev.A + ev.dur)}`; },
   events(){ const g = gameTime(); return events(g.dayN).map(e => `${DAYS[((Math.floor(e.A/1440) % 5) + 5) % 5]} ${hhmm(e.A)} ${e.kind}${e.dur ? ' (' + e.dur + ' min)' : ''}`); },
 };
 { const q = new URLSearchParams(location.search); if (q.get('t')) setTime(q.get('t')); if (q.get('speed')) window.CLOCK.speed(q.get('speed')); }
