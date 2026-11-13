@@ -130,6 +130,7 @@ const UNIT = new THREE.BoxGeometry(1, 1, 1);
 const colliders = [], mapWalls = [], floorRects = [];
 // BY = height offset for furniture helpers, LVL = which level a collider belongs to (0 ground, 1 mezzanine, 3 stairs)
 let BY = 0, LVL = 0;
+const BOARDS = [], CHAIRS = [];   // drawable whiteboards (boards.js) and seats you can sit on
 
 function box(x0, x1, y0, y1, z0, z1, m, collide){
   const me = new THREE.Mesh(UNIT, m);
@@ -548,11 +549,13 @@ function chair(x, z, ang, m){
     shadowRect(-0.22, 0.22, -0.21, 0.21, 0.06, g);
   }
   g.position.set(x, BY, z); g.rotation.y = ang; scene.add(g);
+  CHAIRS.push({x, z, ang, base: BY, mode: BY < -1 ? 2 : BY > 1 ? 1 : 0, h: (!m || m === DARK) ? 0.52 : 0.48});
 }
 function stool(x, z, h){ const g = new THREE.Group(); part(g, 0.36, 0.05, 0.36, 0, h, 0, DARK); part(g, 0.37, 0.012, 0.37, 0, h - 0.031, 0, PLASTIC);
   cyl(g, 0.025, h, 0, h/2, 0, CHROME); cyl(g, 0.17, 0.025, 0, 0.0125, 0, CHROME);
   const ring = new THREE.Mesh(TORUS, CHROME); ring.scale.setScalar(0.15); ring.rotation.x = Math.PI/2; ring.position.y = h*0.42; g.add(ring);   // foot ring
-  shadowRect(-0.18, 0.18, -0.18, 0.18, 0.05, g); g.position.set(x, BY, z); scene.add(g); }
+  shadowRect(-0.18, 0.18, -0.18, 0.18, 0.05, g); g.position.set(x, BY, z); scene.add(g);
+  CHAIRS.push({x, z, ang: null, base: BY, mode: BY < -1 ? 2 : BY > 1 ? 1 : 0, h: h + 0.025}); }   // ang null: a stool, you keep facing the way you came
 // what is on the screens: a few different work views, drawn once and shared
 function screenTex(kind){
   const c = document.createElement('canvas'); c.width = 256; c.height = 150; const g = c.getContext('2d');
@@ -647,8 +650,7 @@ function drawerCabinet(x, dir, z0, z1){
   for (const y of [0.185, 0.555, 0.925]) box(Math.min(fr(0.01), fr(0.02)), Math.max(fr(0.01), fr(0.02)), y-0.012, y+0.012, zc-0.15, zc+0.15, METAL);
 }
 drawerCabinet(13.95, -1, 1.75, 3.55);
-box(13.92, 13.95, 1.3, 2.35, 1.65, 3.65, FRAME); box(13.91, 13.92, 1.33, 2.32, 1.68, 3.62, mat(0xfbfbf8, {roughness: 0.25}));
-box(13.82, 13.92, 1.27, 1.3, 1.75, 3.55, METAL);   // marker tray
+whiteboard(13.95, -1, 1.65, 3.65, 0.3);   // above the drawer cabinet
 // 3 yellow phone booths in the desk-3 slot, numbered from the corridor.
 // Booths 1 and 2 open toward desk 2 (x = 7.875), booth 3 (wall A end) opens toward desk 4 (x = 9.36)
 const YEL = mat(0xf2c230, {roughness: 0.6}), YEL2 = mat(0xd9a51c, {roughness: 0.6}), BOOTHIN = mat(0x34373c);
@@ -687,27 +689,21 @@ function threeDesks(cx){
   monitor(cx+0.4, 0.85, faceAngle(1, 0));  chair(cx+0.8+0.3, 0.85, faceAngle(-1, 0));
   monitor(cx, 2.05, faceAngle(0, 1));      chair(cx, 2.45+0.3, faceAngle(0, -1));
 }
-// whiteboard on a wall along z: wall face at x, board facing +x (dir 1) or -x (dir -1), from z0 to z1
-function whiteboard(x, dir, z0, z1){
-  const X0 = v => x + dir*v, bx = (a, b, y0, y1, za, zb, m) => box(Math.min(X0(a), X0(b)), Math.max(X0(a), X0(b)), y0, y1, za, zb, m);
+// whiteboard on a wall along z: wall face at x, board facing +x (dir 1) or -x (dir -1), from z0 to z1, lifted by lift.
+// Every board has its own canvas that people draw on (boards.js; shared with everyone through mp.js).
+function whiteboard(x, dir, z0, z1, lift){
+  const L = lift || 0, X0 = v => x + dir*v, bx = (a, b, y0, y1, za, zb, m) => box(Math.min(X0(a), X0(b)), Math.max(X0(a), X0(b)), y0 + L, y1 + L, za, zb, m);
   bx(0, 0.03, 1.0, 2.1, z0, z1, FRAME); bx(0.03, 0.04, 1.03, 2.07, z0+0.03, z1-0.03, mat(0xfbfbf8, {roughness: 0.25}));
   bx(0.03, 0.12, 0.97, 1.0, z0+0.1, z1-0.1, METAL);   // marker tray
-  const w = new THREE.Mesh(PLANE, WBOARDS[rnd2()*WBOARDS.length|0]); w.scale.set(z1-z0-0.08, 1.02, 1); w.rotation.y = dir > 0 ? Math.PI/2 : -Math.PI/2;
-  w.position.set(X0(0.0405), BY + 1.55, (z0+z1)/2); scene.add(w);                                                   // what is written on it
-  for (let i=0;i<3;i++){ const zc = z0 + 0.25 + i*0.09; box(Math.min(X0(0.05), X0(0.07)), Math.max(X0(0.05), X0(0.07)), 1.0, 1.02, zc-0.06, zc+0.06, mat([0x2342be, 0xcf1430, 0x1b1b1b][i])); }   // markers
+  const bw = z1 - z0 - 0.08, bh = 1.02, cw = 1024, ch = Math.round(cw*bh/bw), c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const g = c.getContext('2d'); g.fillStyle = '#fbfbf8'; g.fillRect(0, 0, cw, ch);
+  const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+  const w = new THREE.Mesh(PLANE, new THREE.MeshStandardMaterial({map: tex, roughness: 0.3})); w.scale.set(bw, bh, 1); w.rotation.y = dir > 0 ? Math.PI/2 : -Math.PI/2;
+  w.position.set(X0(0.0405), BY + L + 1.55, (z0+z1)/2); scene.add(w);
+  for (let i=0;i<3;i++){ const zc = z0 + 0.25 + i*0.09; bx(0.05, 0.07, 1.0, 1.02, zc-0.06, zc+0.06, mat([0x2342be, 0xcf1430, 0x1b1b1b][i])); }   // markers
+  // u runs left → right as you face the board, v bottom → top
+  BOARDS.push({id: BOARDS.length, x: X0(0.0405), dir, z0: z0 + 0.04, z1: z1 - 0.04, y0: BY + L + 1.04, y1: BY + L + 2.06, base: BY, mode: BY < -1 ? 2 : BY > 1 ? 1 : 0, canvas: c, ctx: g, tex});
 }
-// whiteboard writing: boxes and arrows, a list, a bar sketch, in blue/red/black marker on a transparent canvas
-const WBOARDS = [0, 1, 2].map(kind => { const c = document.createElement('canvas'); c.width = 512; c.height = 300; const g = c.getContext('2d'); g.lineCap = 'round'; g.lineJoin = 'round';
-  const pen = (col, w) => { g.strokeStyle = col; g.fillStyle = col; g.lineWidth = w || 3; }, wob = () => (rnd2() - 0.5)*3;
-  const line = (pts) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x + wob(), y + wob()) : g.moveTo(x, y)); g.stroke(); };
-  const scrib = (x, y, w) => { g.beginPath(); g.moveTo(x, y); for (let u=0; u<w; u+=6) g.lineTo(x + u, y + Math.sin(u*0.7 + rnd2()*2)*3); g.stroke(); };
-  if (kind === 0){ pen('#2342be'); for (const [x, y] of [[40, 60], [200, 60], [360, 60], [200, 190]]){ line([[x, y], [x+100, y], [x+100, y+55], [x, y+55], [x, y]]); scrib(x+12, y+28, 70); }
-    pen('#cf1430'); line([[140, 88], [198, 88]]); line([[300, 88], [358, 88]]); line([[250, 115], [250, 188]]); line([[190, 80], [198, 88], [190, 96]]); line([[350, 80], [358, 88], [350, 96]]); }
-  else if (kind === 1){ pen('#1b1b1b', 4); scrib(40, 40, 180); pen('#2342be'); for (let r=0;r<6;r++){ g.beginPath(); g.arc(50, 85 + r*34, 4, 0, 7); g.fill(); scrib(66, 85 + r*34, 120 + rnd2()*160); }
-    pen('#cf1430', 4); line([[380, 90], [395, 110], [430, 70]]); line([[380, 160], [395, 180], [430, 140]]); }
-  else { pen('#1b1b1b', 3); line([[50, 250], [470, 250]]); line([[50, 250], [50, 30]]); pen('#2342be', 3);
-    [70, 120, 95, 160, 190].forEach((h, i) => line([[80 + i*80, 250], [80 + i*80, 250 - h], [130 + i*80, 250 - h], [130 + i*80, 250]])); pen('#cf1430', 4); line([[100, 200], [180, 150], [260, 170], [340, 100], [420, 60]]); }
-  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return new THREE.MeshBasicMaterial({map: t, transparent: true, depthWrite: false, color: 0xe8e8e8}); });
 whiteboard(18.08, 1, 3.1, 4.9);    // Management: shared wall with CEO, corridor end
 whiteboard(17.98, -1, 3.1, 4.9);   // CEO: same wall, CEO side
 whiteboard(22.01, 1, 3.1, 5.1);    // Rabot: wall shared with Management, corridor end
@@ -1344,19 +1340,43 @@ function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ co
 // A run-up (Shift + forward) jumps higher. Pressing jump again in the air goes to GAME.onAirJump (postit.js: stick a post-it).
 let hopY = 0, hopV = 0;
 function hop(){
-  if (!started || paused || GAME.controlLock) return;
+  if (!started || paused || GAME.controlLock || seat) return;
   if (hopY > 0 || hopV > 0){ if (GAME.onAirJump) GAME.onAirJump(hopY); return; }
   const run = (keys.ShiftLeft || keys.ShiftRight) && (keys.KeyW || keys.ArrowUp || jvy < -0.5);
   hopV = run ? 3.75 : 3.3;
 }
 GAME.jump = hop;
-// E / the prompt: a fixture (toilet.js) gets first go, otherwise the nearest door
-function useOrDoor(){ if (window.__onUse && window.__onUse()) return; toggleDoor(); }
+// Things you can use with E (or by tapping the prompt): modules add {tick(dt, keys) → prompt text, use() → handled?} to GAME.uses.
+// Every frame each tick runs (and may draw); the first prompt is shown. E goes to the first use() that handles it, otherwise the nearest door.
+GAME.uses = [];
+function useOrDoor(){ for (const u of GAME.uses) if (u.use()) return; toggleDoor(); }
 doorHint.addEventListener('click', e => { e.preventDefault(); useOrDoor(); });
 doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); useOrDoor(); });
-// toilet.js: put the player on a spot looking a given way; while GAME.controlLock is set, walking stops and mouse / touch go to GAME.onAim
-GAME.fixtures = FIXTURES;
+// Minigames put the player on a spot looking a given way (GAME.setView). While GAME.controlLock holds an object, walking and looking stop
+// and the mouse / touch go to it instead: lock.aim(dx, dy, speed, screenX, screenY, absolute) and lock.press(down, screenX, screenY).
+GAME.fixtures = FIXTURES; GAME.boards = BOARDS; GAME.chairs = CHAIRS;
 GAME.setView = (x, z, y, p) => { px = x; pz = z; yaw = y; pitch = p; hopY = hopV = 0; };
+GAME.getView = () => ({x: px, z: pz, yaw, pitch, mode});
+// ---------- sitting: E next to a chair or stool sits you down (you can still look around); E again or walking gets you up ----------
+let seat = null;
+function nearChair(){ let best = null, bd = 0.8;
+  for (const c of CHAIRS){ if (c.mode !== mode) continue; const d = Math.hypot(px - c.x, pz - c.z); if (d < bd && !(window.__seatTaken && window.__seatTaken(c))){ bd = d; best = c; } }
+  return best; }
+function sitDown(c){ seat = c; hopY = hopV = 0; px = c.x; pz = c.z; if (c.ang !== null){ yaw = c.ang; pitch = -0.12; } }
+function standUp(){
+  const c = seat; seat = null; if (!c) return;
+  // step out behind the chair (away from the table), or to a side if that is blocked
+  const a = c.ang === null ? yaw : c.ang, bx = Math.sin(a), bz = Math.cos(a);
+  for (const [ox, oz] of [[bx, bz], [bz, -bx], [-bz, bx], [-bx, -bz]]) if (!blocked(c.x + ox*0.42, c.z + oz*0.42)){ px = c.x + ox*0.42; pz = c.z + oz*0.42; return; }
+}
+GAME.uses.push({
+  tick(dt, k){
+    if (!started || paused) return '';
+    if (seat){ if (k.KeyW || k.KeyA || k.KeyS || k.KeyD || k.ArrowUp || k.ArrowDown || k.ArrowLeft || k.ArrowRight || Math.hypot(jvx, jvy) > 0.5) standUp(); return seat && isTouch ? 'Tap to stand up' : ''; }
+    if (GAME.controlLock || hopY > 0) return '';
+    return nearChair() ? (isTouch ? 'Tap to sit down' : 'Press E to sit down') : ''; },
+  use(){ if (seat){ standUp(); return true; } if (GAME.controlLock || hopY > 0 || !started || paused) return false; const c = nearChair(); if (!c) return false; sitDown(c); return true; },
+});
 function look(dx, dy, s){ yaw -= dx*s; pitch -= dy*s; pitch = Math.max(-1.45, Math.min(1.45, pitch)); }
 const keys = {};
 addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ useOrDoor(); return; } if (e.code === 'Space'){ e.preventDefault(); if (!e.repeat) hop(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
@@ -1377,28 +1397,30 @@ document.addEventListener('pointerlockerror', () => { locked = false; });
 document.addEventListener('mousemove', e => {
   mouseIn = true; mx = e.clientX / Math.max(1, innerWidth);
   if (!started || paused || isTouch) return;
-  if (GAME.controlLock){ if (GAME.onAim) GAME.onAim(e.movementX || 0, e.movementY || 0, locked ? 1 : 1.8); return; }
+  const L = GAME.controlLock; if (L){ if (L.aim) L.aim(e.movementX || 0, e.movementY || 0, locked ? 1 : 1.8, e.clientX, e.clientY, !locked); return; }
   look(e.movementX || 0, e.movementY || 0, locked ? 0.0022 : 0.004);
 });
 document.addEventListener('mouseout', e => { if (!e.relatedTarget) mouseIn = false; });
+document.addEventListener('mousedown', e => { const L = GAME.controlLock; if (L && L.press && started && !paused && e.button === 0 && (e.target === canvas || locked)) L.press(true, e.clientX, e.clientY, !locked); });
+document.addEventListener('mouseup', e => { const L = GAME.controlLock; if (L && L.press && e.button === 0) L.press(false, e.clientX, e.clientY, !locked); });
 
 const joy = document.getElementById('joy'), knob = document.getElementById('knob');
 let joyId = null, jx0 = 0, jy0 = 0, jvx = 0, jvy = 0, lookId = null, lx = 0, ly = 0;
 canvas.addEventListener('touchstart', e => { e.preventDefault(); if (!started) return;
   for (const t of e.changedTouches){
-    if (GAME.controlLock){ if (lookId === null){ lookId = t.identifier; lx = t.clientX; ly = t.clientY; } continue; }   // aiming: any finger drags the aim
+    if (GAME.controlLock){ if (lookId === null){ lookId = t.identifier; lx = t.clientX; ly = t.clientY; if (GAME.controlLock.press) GAME.controlLock.press(true, lx, ly, true); } continue; }   // minigame: one finger aims / draws
     if (t.clientX < innerWidth*0.45 && joyId === null){ joyId = t.identifier; jx0 = t.clientX; jy0 = t.clientY; joy.style.left = jx0 + 'px'; joy.style.top = jy0 + 'px'; joy.style.display = 'block'; knob.style.transform = ''; }
     else if (lookId === null){ lookId = t.identifier; lx = t.clientX; ly = t.clientY; } } }, {passive: false});
 canvas.addEventListener('touchmove', e => { e.preventDefault();
   for (const t of e.changedTouches){
     if (t.identifier === joyId){ let dx = t.clientX-jx0, dy = t.clientY-jy0; const L = Math.hypot(dx, dy), M = 50; if (L > M){ dx *= M/L; dy *= M/L; } jvx = dx/M; jvy = dy/M; knob.style.transform = `translate(${dx}px,${dy}px)`; }
-    else if (t.identifier === lookId){ if (GAME.controlLock){ if (GAME.onAim) GAME.onAim(t.clientX-lx, t.clientY-ly, 2.4); } else look(t.clientX-lx, t.clientY-ly, 0.0065); lx = t.clientX; ly = t.clientY; } } }, {passive: false});
-function endTouch(e){ for (const t of e.changedTouches){ if (t.identifier === joyId){ joyId = null; jvx = jvy = 0; joy.style.display = 'none'; } if (t.identifier === lookId) lookId = null; } }
+    else if (t.identifier === lookId){ const L = GAME.controlLock; if (L){ if (L.aim) L.aim(t.clientX-lx, t.clientY-ly, 2.4, t.clientX, t.clientY, true); } else look(t.clientX-lx, t.clientY-ly, 0.0065); lx = t.clientX; ly = t.clientY; } } }, {passive: false});
+function endTouch(e){ for (const t of e.changedTouches){ if (t.identifier === joyId){ joyId = null; jvx = jvy = 0; joy.style.display = 'none'; } if (t.identifier === lookId){ lookId = null; const L = GAME.controlLock; if (L && L.press) L.press(false, t.clientX, t.clientY, true); } } }
 canvas.addEventListener('touchend', endTouch); canvas.addEventListener('touchcancel', endTouch);
 
 window.__onStart = () => { started = true; paused = false; document.getElementById('msg').style.display = 'none'; tryLock(); };
 window.__ready = true; if (window.__started) document.getElementById('msg').style.display = 'none';
-document.getElementById('goto').addEventListener('change', e => { const v = e.target.value; if (!v) return; const [x, z, deg, lv] = v.split(',').map(Number); px = x; pz = z; mode = lv || 0; yaw = deg*Math.PI/180; pitch = 0; e.target.value = ''; e.target.blur(); });
+document.getElementById('goto').addEventListener('change', e => { const v = e.target.value; if (!v) return; const [x, z, deg, lv] = v.split(',').map(Number); px = x; pz = z; mode = lv || 0; yaw = deg*Math.PI/180; pitch = 0; seat = null; e.target.value = ''; e.target.blur(); });
 
 const rooms = [
   ['CEO', 14, 18.03, 0, 5.32], ['Management', 18.03, 21.96, 0, 5.32], ['Rabot', 21.96, 25.03, 0, 5.32], ['Prinsenhof', 25.03, 28, 0, 5.32],
@@ -1426,7 +1448,7 @@ function frame(){
   const dt = Math.min(0.05, clock.getDelta());
   let fwd = 0, str = 0;
   if (started && !paused && !locked && !isTouch && mouseIn && !GAME.controlLock){ if (mx < 0.06) yaw += 1.6*dt; else if (mx > 0.94) yaw -= 1.6*dt; }
-  if (started && !paused && !GAME.controlLock){
+  if (started && !paused && !GAME.controlLock && !seat){
     if (keys.KeyW || keys.ArrowUp) fwd += 1; if (keys.KeyS || keys.ArrowDown) fwd -= 1;
     if (keys.KeyD || keys.ArrowRight) str += 1; if (keys.KeyA || keys.ArrowLeft) str -= 1;
     const kl = Math.hypot(fwd, str); if (kl > 1){ fwd /= kl; str /= kl; }
@@ -1446,12 +1468,12 @@ function frame(){
   const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 4 ? stairY(px, pz) : 0;
   const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
-  camera.position.set(px, EYE + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
-  const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone;
+  camera.position.set(px, seat ? seat.base + seat.h + 0.72 : EYE + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
+  const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone; st.si = seat ? seat.h : 0;
   if (window.__onFrame) window.__onFrame(dt);
   if (window.__onFrameClock) window.__onFrameClock(dt);
   camera.updateMatrixWorld();
-  const useHint = window.__onFrameToilet ? window.__onFrameToilet(dt, keys) : '';   // toilet.js: draws the minigame, returns its prompt
+  let useHint = ''; for (const u of GAME.uses){ const h = u.tick(dt, keys); if (h && !useHint) useHint = h; }   // toilet.js, boards.js, sitting
   for (const d of doors){ if (d.cur !== d.target){ d.cur += (d.target - d.cur)*Math.min(1, dt*7); if (Math.abs(d.target - d.cur) < 0.005) d.cur = d.target; doorAngle(d, d.cur); } }
   nearDoor = (started && !paused) ? findNearDoor() : null;
   const ht = useHint ? useHint : GAME.controlLock ? '' : nearDoor ? (isTouch ? 'Tap to ' : 'Press E to ') + (nearDoor.target > 0 ? 'close' : 'open') + ' · ' + nearDoor.name : '';
@@ -1470,5 +1492,6 @@ window.dispatchEvent(new Event('game-ready'));
 <script type="module" src="mp.js"></script>
 <script type="module" src="clock.js"></script>
 <script type="module" src="toilet.js"></script>
+<script type="module" src="boards.js"></script>
 </body>
 </html>
