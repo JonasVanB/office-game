@@ -72,6 +72,7 @@ function chairModel(color){
   return g;
 }
 function buildWorld(){
+  const n0 = G.scene.children.length;
   const D = DECK, mat = (c, o) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: 0.9}, o || {}));
   // the building under the track, and its roof
   const facade = tex(128, 128, (g, s) => { g.fillStyle = '#9aa0a6'; g.fillRect(0, 0, s, s); for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++){ g.fillStyle = (r*7 + k*3) % 5 === 0 ? '#dfe6ea' : '#4d5a65'; g.fillRect(k*32 + 6, r*32 + 8, 20, 17); } }, 9, 3);
@@ -122,6 +123,7 @@ function buildWorld(){
   // the four racing chairs on the grid
   GRID.forEach((gp, k) => { const c = chairModel(COLORS[k]); c.position.set(gp.x, 0, gp.z); c.rotation.y = gp.yaw; G.scene.add(c); chairs.push(c); });
   ghostChair = chairModel(0xffffff); ghostChair.traverse(o => { if (o.material){ o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; } }); ghostChair.visible = false; G.scene.add(ghostChair);
+  if (G.mergeStatic) G.mergeStatic(G.scene.children.slice(n0).filter(o => o.isMesh));   // the deck, rails, track and pads never move: a handful of draw calls (chairs and the gantry are groups and stay)
 }
 let lights = [], OBST = [];
 

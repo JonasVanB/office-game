@@ -1075,8 +1075,9 @@ box(-60, 110, -12.99, -12.97, 22, 30, mat(0x55575a, {roughness: 0.95})); box(-60
 box(-60, 110, -12.99, -12.85, 18, 22, mat(0xb4b0a8)); box(-60, 110, -12.99, -12.85, 30, 33, mat(0xb4b0a8));
 { const TRUNK = mat(0x5b4636, {roughness: 0.9}), CROWN = [0x4f7a3a, 0x5d8a44, 0x446b33].map(c => mat(c, {roughness: 0.9}));
   for (let i=0;i<46;i++){ const x = -30 + i*3.7 + rnd2()*2, z = i % 2 ? 19.5 + rnd2() : -9 - rnd2()*8, s = 2.2 + rnd2()*1.6;
-    cyl(scene, 0.22, s*1.6, x, -13 + s*0.8, z, TRUNK);
-    for (let k=0;k<3;k++){ const me = new THREE.Mesh(leafGeo, CROWN[(i + k) % 3]), r = s*(0.75 + rnd2()*0.35); me.scale.set(r, r*0.85, r); me.position.set(x + (rnd2()-0.5)*s*0.8, -13 + s*1.6 + r*0.5 + k*0.4, z + (rnd2()-0.5)*s*0.8); scene.add(me); } } }
+    const skip = x > 52 && x < 74 && z < -3, to = skip ? new THREE.Group() : scene;   // none inside the neighbour's building east of us (parkour.js); rnd2 still runs so the other trees stay put
+    cyl(to, 0.22, s*1.6, x, -13 + s*0.8, z, TRUNK);
+    for (let k=0;k<3;k++){ const me = new THREE.Mesh(leafGeo, CROWN[(i + k) % 3]), r = s*(0.75 + rnd2()*0.35); me.scale.set(r, r*0.85, r); me.position.set(x + (rnd2()-0.5)*s*0.8, -13 + s*1.6 + r*0.5 + k*0.4, z + (rnd2()-0.5)*s*0.8); to.add(me); } } }
 
 // ======================= 3e verdiep (one floor down): copy of the Entrance (x 28–35) and the Stille ruimte (x 35–50) =======================
 // Walls, floors and a flat 2.6 m ceiling only: no furniture, kitchen, mezzanine or curved roof.
@@ -1308,8 +1309,10 @@ function stairMode(){
 }
 for (const m of [6]) colliders.push([SX0-0.1, SX0, 0.17, 2.97, m], [SXL, SXT, SZM-0.02, SZM+0.02, m], [SX0-0.1, SXT+0.05, 0.07, 0.2, m], [SX0-0.1, SXT+0.05, 2.94, 3.07, m]);   // walls while on the stairs (mode 4 above)
 
-// ---------- merge everything built so far (it never moves) into one mesh per material per 10 m stretch and floor ----------
+// ---------- merge everything built so far (it never moves) into a few big meshes ----------
 // Thousands of small meshes become a few hundred, so all the detail above costs very few draw calls. Doors and avatars are added later and stay separate.
+// Plain (untextured) materials that only differ in colour share one material: the colour goes into the vertices instead. A material whose colour or
+// glow changes at runtime (screens, lamps) is marked userData.dynamic and keeps its own draw call.
 // copy one mesh's vertices into the merged buffers at offset k, in world space (minus the bucket centre); returns the new offset
 function bakeVerts(P, N, U, k, pa, na, ua, ia, e, n, cx, cy, cz){
   const cnt = ia !== null ? ia.length : pa.length/3;
@@ -1320,37 +1323,60 @@ function bakeVerts(P, N, U, k, pa, na, ua, ia, e, n, cx, cy, cz){
     if (ua !== null){ U[k*2] = ua[j*2]; U[k*2+1] = ua[j*2+1]; } }
   return k;
 }
-function mergeStatic(){
+// mergeMeshes(list, parent, cell): bake the meshes in `list` into one mesh per material per `cell` metres (along x) and floor, as children of `parent`
+// (in its local space, so a group that moves as a whole can still move). Meshes that are hidden, instanced, multi-material, vertex-coloured or
+// mirrored are left alone. Returns how many meshes it removed.
+const VC_MATS = new Map();   // material signature (everything but the colour) → the shared vertex-coloured material
+const MAP_KEYS = ['map', 'emissiveMap', 'normalMap', 'bumpMap', 'roughnessMap', 'metalnessMap', 'alphaMap', 'aoMap', 'lightMap', 'envMap', 'displacementMap', 'specularMap'];
+function vcSig(m){
+  if (m.userData.dynamic || !(m.type === 'MeshStandardMaterial' || m.type === 'MeshBasicMaterial') || MAP_KEYS.some(k => m[k])) return null;
+  return [m.type, m.roughness, m.metalness, m.emissive ? m.emissive.getHex() : 0, m.emissiveIntensity, m.transparent, m.opacity, m.side, m.depthWrite, m.depthTest, m.flatShading, m.alphaTest,
+    m.polygonOffset, m.polygonOffsetFactor, m.polygonOffsetUnits, m.toneMapped, m.fog, m.blending, m.colorWrite, m.wireframe].join('|');
+}
+function vcMat(sig, m){ let s = VC_MATS.get(sig); if (!s){ s = m.clone(); s.color.setRGB(1, 1, 1); s.vertexColors = true; s.userData = {}; s.name = 'vc'; VC_MATS.set(sig, s); } return s; }
+function mergeMeshes(list, parent, cell){
   scene.updateMatrixWorld(true);
-  const buckets = new Map(), drop = [], v = new THREE.Vector3(), nm = new THREE.Matrix3();
-  scene.traverse(o => {
-    if (!o.isMesh || Array.isArray(o.material) || !o.geometry.attributes.position) return;
-    for (let p = o.parent; p; p = p.parent) if (p.userData.noMerge) return;   // things that move (the Gravensteen table, the boxing ring)
+  const buckets = new Map(), drop = [], v = new THREE.Vector3(), nm = new THREE.Matrix3(), inv = new THREE.Matrix4().copy(parent.matrixWorld).invert();
+  for (const o of list){
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible || Array.isArray(o.material) || o.material.vertexColors || !o.geometry.attributes.position || o.geometry.morphAttributes.position) continue;
+    const M = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld); if (M.determinant() < 0) continue;
     const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
-    v.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld);
-    const key = o.material.uuid + '|' + Math.floor(v.x/10) + '|' + (v.y < -3.4 ? -1 : v.y < -0.4 ? 0 : 1) + '|' + o.renderOrder;
-    let b = buckets.get(key); if (!b){ b = {m: o.material, ro: o.renderOrder, parts: [], n: 0, c: new THREE.Vector3()}; buckets.set(key, b); }
-    b.parts.push(o); b.n += g.index ? g.index.count : g.attributes.position.count; b.c.add(v); drop.push(o);
-  });
-  const parents = new Set(); for (const o of drop){ o.userData.merged = true; parents.add(o.parent); }   // one filter pass per parent (remove() one by one is quadratic)
-  for (const p of parents) p.children = p.children.filter(o => { if (o.userData.merged){ o.parent = null; return false; } return true; });
-  scene.children = scene.children.filter(o => { if (o.type === 'Group' && !o.children.length){ o.parent = null; return false; } return true; });
+    v.copy(g.boundingSphere.center).applyMatrix4(M);
+    const sig = vcSig(o.material), key = (sig ? 'vc' + sig : o.material.uuid) + '|' + Math.floor(v.x/cell) + '|' + (v.y < -3.4 ? -1 : v.y < -0.4 ? 0 : 1) + '|' + o.renderOrder;
+    let b = buckets.get(key); if (!b){ b = {m: sig ? vcMat(sig, o.material) : o.material, vc: !!sig, ro: o.renderOrder, parts: [], n: 0, c: new THREE.Vector3()}; buckets.set(key, b); }
+    b.parts.push([o, M]); b.n += g.index ? g.index.count : g.attributes.position.count; b.c.add(v); drop.push(o);
+  }
+  const parents = new Set(); for (const o of drop){ o.userData.bakedAway = true; if (o.parent) parents.add(o.parent); }   // one filter pass per parent (remove() one by one is quadratic)
+  for (const p of parents) p.children = p.children.filter(o => { if (o.userData.bakedAway){ o.parent = null; return false; } return true; });
+  for (const p of parents) if (p !== scene && p !== parent && p.type === 'Group' && !p.children.length && p.parent) p.parent.children = p.parent.children.filter(o => { if (o === p){ o.parent = null; return false; } return true; });
   for (const b of buckets.values()){
     b.c.divideScalar(b.parts.length);
-    const P = new Float32Array(b.n*3), N = new Float32Array(b.n*3), U = new Float32Array(b.n*2); let k = 0;
+    const P = new Float32Array(b.n*3), N = new Float32Array(b.n*3), U = new Float32Array(b.n*2), C = b.vc ? new Float32Array(b.n*3) : null; let k = 0;
     const cx = b.c.x, cy = b.c.y, cz = b.c.z;
-    for (const o of b.parts){   // plain array maths: this runs over every vertex of the building
+    for (const [o, M] of b.parts){   // plain array maths: this runs over every vertex of the building
       const g = o.geometry, pa = g.attributes.position.array, na = g.attributes.normal && g.attributes.normal.array, ua = g.attributes.uv && g.attributes.uv.array;
-      const ia = g.index ? g.index.array : null, e = o.matrixWorld.elements, n = nm.getNormalMatrix(o.matrixWorld).elements;
+      const ia = g.index ? g.index.array : null, e = M.elements, n = nm.getNormalMatrix(M).elements, k0 = k;
       k = bakeVerts(P, N, U, k, pa, na || null, ua || null, ia, e, n, cx, cy, cz);
+      if (C){ const col = o.material.color; for (let i = k0*3; i < k*3; i += 3){ C[i] = col.r; C[i+1] = col.g; C[i+2] = col.b; } }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+    if (C) g.setAttribute('color', new THREE.BufferAttribute(C, 3));
     g.computeBoundingSphere();
-    const me = new THREE.Mesh(g, b.m); me.position.copy(b.c); me.renderOrder = b.ro; me.updateMatrix(); me.matrixAutoUpdate = false; scene.add(me);
+    const me = new THREE.Mesh(g, b.m); me.position.copy(b.c); me.renderOrder = b.ro; me.userData.merged = 'chunk'; me.updateMatrix(); me.matrixAutoUpdate = false; parent.add(me);
   }
+  return drop.length;
+}
+// everything built so far, except the groups that move: the Gravensteen table and the boxing ring are merged inside their own group, the lever (its handle turns) stays as it is
+function mergeStatic(){
+  for (const m of [SCREEN, LIGHT, TVSCREEN]) m.userData.dynamic = true;   // clock.js changes these
+  const list = []; scene.traverse(o => { if (!o.isMesh) return; for (let p = o.parent; p; p = p.parent) if (p.userData.noMerge) return; list.push(o); });
+  mergeMeshes(list, scene, 60);
+  for (const g of [GRAV.furn, GRAV.ring]){ const l = []; g.traverse(o => { if (o.isMesh) l.push(o); }); mergeMeshes(l, g, 1e4); }
 }
 mergeStatic();
+// modules call this once their static scenery is built (parkour course, race deck, paintball arena): only pass meshes that never move or hide
+GAME.mergeStatic = list => mergeMeshes(list, scene, 20);
 
 
 // ---------- doors: a leaf in every doorway (4e gray like the metal profiles, 3e white), press E (or tap the prompt) to open / close ----------

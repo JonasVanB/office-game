@@ -287,6 +287,7 @@ function remoteShots(ps){
 // ---------- the room: door sign, bases, flags, cover ----------
 function tex(w, h){ const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return {c, g: c.getContext('2d'), t}; }
 function buildRoom(){
+  const n0 = G.scene.children.length;
   const S = G.scene, M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: 0.6}, o || {}));
   const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); S.add(m); return m; };
   const KIND = {brick: [M(0xf2c230), M(0x1d2229)], snake: [M(0x2f3a48), M(0xf2c230)], desk: [M(0xb48a5a, {roughness: 0.7}), M(0x8e9196, {metalness: 0.4, roughness: 0.4})], boxes: [M(0xc49a6c, {roughness: 0.9}), M(0xa47b4f, {roughness: 0.9})], can: [M(0xe8e6df), M(0x2f7be8)]};
@@ -324,6 +325,7 @@ function buildRoom(){
   const hop = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), new THREE.MeshStandardMaterial({color: 0x3a3f46, roughness: 0.5})); hop.position.set(0, 0.1, -0.02); hop.scale.set(1, 0.8, 1.3); gun.add(hop); gun.userData.hop = hop;
   part(0.072, 0.02, 0.1, 0, 0.05, 0.08, GA);
   gun.visible = false; gun.renderOrder = 5; S.add(gun);
+  if (G.mergeStatic) G.mergeStatic(S.children.slice(n0).filter(o => o.isMesh));   // obstacles, bases and signs never move (flags and the gun are groups and stay)
 }
 function drawSign(ps){
   const g = game(), players = ps.filter(p => p.pr === 'p').length, spect = ps.filter(p => p.pr === 's').length, live = g && g.ph === 'play';

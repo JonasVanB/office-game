@@ -70,4 +70,5 @@ Start at the **east** emergency door, run over the neighbour's roof, go west alo
 
 - `parkour.js` builds the course and has its own 3D physics. Solids are axis-aligned boxes plus the curved roofs as a height function (`roofF`). It takes `GAME.controlLock` while you are outside, sets the camera itself (roll, FOV) and reports your feet height through `GAME.feetY`
 - `index.html` hooks: `GAME.feetY` (shared y + no stair/level switching while outside) and `GAME.zoneOverride` ("Rooftop parkour"). The stairwell window in wall A (x 30–34.65, behind the first wall-run panel) has an indoor collider on the 4e and 3e, so you cannot walk out through it
+- Performance: at the end of `buildCourse` every course mesh is baked into a few big meshes by `GAME.mergeStatic` (index.html). Anything you add that moves or hides must be a Group (groups are skipped); a material whose colour changes (the checkpoint lamps) gets `userData.dynamic = true`
 - Console helpers: `PARKOUR.enter()`, `PARKOUR.go(n)` (jump to checkpoint n), `PARKOUR.restart()`, `PARKOUR.me`

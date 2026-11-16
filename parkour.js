@@ -71,6 +71,7 @@ function sign(x, y, z, w, h, nx, nz, map){ const p = new THREE.Mesh(new THREE.Pl
 
 let YEL, CHEV, climbTex, wallPanelB;
 function buildCourse(){
+  const n0 = G.scene.children.length;
   YEL = mat(0xffc400, {emissive: 0x7a5200, roughness: 0.5});
   CHEV = new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, toneMapped: false, map: tex(128, 128, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#ffcc1a';
     for (const y of [18, 62]){ g.beginPath(); g.moveTo(14, y + 40); g.lineTo(64, y); g.lineTo(114, y + 40); g.lineTo(114, y + 58); g.lineTo(64, y + 20); g.lineTo(14, y + 58); g.closePath(); g.fill(); } })});
@@ -130,7 +131,6 @@ function buildCourse(){
   ac(59.5, 60.5, -5.5, -1.5);                                                          // vault
   box(56, 56.25, -0.79, -0.78, -4.2, -0.6, YEL);                                       // take-off to the gantry
   decal(58.4, -0.8, 6.5, 1.1, 1.1, 1, 0, CHEV); decal(63.3, -0.8, 5.6, 1.1, 1.1, 0, -1, CHEV); decal(63.3, -0.8, -2.8, 1.1, 1.1, -1, 0, CHEV); decal(57.6, -0.8, -2.6, 1.1, 1.1, -1, 0, CHEV);
-  G.scene.updateMatrixWorld(); for (const o of G.scene.children) if (o.isMesh && o.geometry && o.geometry.type !== 'BoxGeometry' && o.position.y < -2 && o.position.y > -12.9 && o.position.x > 52 && o.position.x < 74 && o.position.z > -20 && o.position.z < -3) o.visible = false;   // street trees that would grow through it
   box(62, 64, -0.8, 0.4, -8.4, -6.6, mat(0x9b968c)); solid(62, 64, -0.8, 0.4, -8.4, -6.6);   // a water tank base (scenery)
   rod([63, 0.4, -7.5], [63, 2.2, -7.5], 0.9, mat(0x7c8288, {metalness: 0.4}));
 
@@ -236,7 +236,8 @@ function buildCourse(){
   sign(61.64, 2.45, 9.7, 2.0, 0.5, -1, 0, banner('FINISH'));
   // ---------- checkpoint lamps ----------
   for (const c of CPS){ const [x, y, z] = c.post; box(x - 0.05, x + 0.05, y, y + 1.6, z - 0.05, z + 0.05, steel);
-    const l = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshBasicMaterial({color: 0xffc400, toneMapped: false})); l.position.set(x, y + 1.72, z); G.scene.add(l); cpLamps.push(l); }
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshBasicMaterial({color: 0xffc400, toneMapped: false})); l.material.userData.dynamic = true; l.position.set(x, y + 1.72, z);   // turns green: keeps its own material when the course is merged
+    G.scene.add(l); cpLamps.push(l); }
   // ---------- leaderboards: on the east wall next to the balcony, and at the finish ----------
   const bt = boardTex(); boards.push(bt);
   sign(50.31, 1.45, 10.7, 3.2, 3.2, 1, 0, bt.t); box(50.25, 50.3, -0.2, 3.1, 9.0, 12.4, steel);
@@ -246,6 +247,7 @@ function buildCourse(){
   const gb = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 1.2, 10), gm); gb.position.y = 0.9; ghostMesh.add(gb);
   const gh = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), gm); gh.position.y = 1.68; ghostMesh.add(gh);
   ghostMesh.visible = false; G.scene.add(ghostMesh);
+  if (G.mergeStatic) G.mergeStatic(G.scene.children.slice(n0).filter(o => o.isMesh));   // the whole course is static (lamps only change colour): a few dozen draw calls instead of ~340
 }
 
 // ---------- the leaderboard as a canvas texture ----------
