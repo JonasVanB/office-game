@@ -479,6 +479,9 @@ wallH(7.68, 35, 42.35, [[35.09, 36.04]]); wallV(39.03, 7.68, 13);   // Boekentor
 // flight A (z 1.6–2.94) goes down from the top landing (x 33.95) toward x 31.55, half landing at x 30.0–31.55 (y −1.53),
 // flight B (z 0.2–1.54) goes on down back toward x 33.95, arriving on the 3e next to the stairwell door. 9 + 9 risers of 0.17 m.
 const SX0 = 30.0, SXL = 31.55, SXT = 33.95, SZM = 1.57, SH = 1.53, STONE = floorMat(stoneTex);
+// stairFlights(): one storey of this U-stair (flight A, half landing, flight B and the railing), from the floor at BY down 3.06 m.
+// Every floor below gets its own copy: call it with BY = that floor's upper neighbour, and add a row to FLIGHTS (movement, further down).
+function stairFlights(){
 for (let i=1;i<=8;i++){ const xb = SXT - 0.3*(i-1); box(xb-0.3, xb, -0.17*i-0.2, -0.17*i, 1.6, 2.94, STONE); }
 box(SX0, SXL, -SH-0.2, -SH, 0.2, 2.94, STONE);                                           // half landing
 for (let i=1;i<=8;i++){ const xa = SXL + 0.3*(i-1); box(xa, xa+0.3, -SH-0.17*i-0.2, -SH-0.17*i, 0.2, 1.54, STONE); }
@@ -495,6 +498,8 @@ for (let i=1;i<=8;i++){ const xa = SXL + 0.3*(i-1); box(xa, xa+0.3, -SH-0.17*i-0
     box(x-0.025, x+0.025, y0, y1, z-0.025, z+0.025, METAL);                                              // end posts
   box(SXL-0.025, SXL+0.025, yA(SXL)+RH-0.022, yA(SXL)+RH+0.022, zB, zA, METAL);                             // across the gap at the half landing
 }
+}
+stairFlights();   // 4e → 3e
 // the stair shaft: one clean double-height space (3e floor → 4e ceiling) between the wall at x = 30 (left) and x = 35 (right)
 box(SX0-0.05, SX0+0.05, -3.06, 2.6, 0, 3.14, WALL);                                           // left wall, full height
 box(34.95, 35.05, -0.46, 0, 0, 3.14, WALL); box(SX0, 35.0, -0.46, 0, 3.09, 3.19, WALL);        // close the slab gap in the right and back walls
@@ -1076,8 +1081,10 @@ box(-60, 110, -12.99, -12.85, 18, 22, mat(0xb4b0a8)); box(-60, 110, -12.99, -12.
 // ======================= 3e verdiep (one floor down): copy of the Entrance (x 28–35) and the Stille ruimte (x 35–50) =======================
 // Walls, floors and a flat 2.6 m ceiling only: no furniture, kitchen, mezzanine or curved roof.
 const LO = -3.06, MW0 = mapWalls.length, FR0 = floorRects.length;
-floor(28, 50, 0, 13, carpetTex, 0, '#3d5f96', LO);
-floor(28, 35, 0, 3.14, stoneTex, 2, '#a3a19c', LO); floor(33.86, 35, 3.14, 5.32, stoneTex, 2, '#a3a19c', LO);
+// the floor is open over the stairs down to the 2e (x SX0–SXT, z 0.17–2.97), like the 4e
+for (const [x0, x1, z0, z1] of [[28, 50, 3.14, 13], [28, SX0, 0, 3.14], [SXT, 50, 0, 3.14], [SX0, SXT, 0, 0.17], [SX0, SXT, 2.97, 3.14]]) floor(x0, x1, z0, z1, carpetTex, 0, '#3d5f96', LO);
+for (const [x0, x1, z0, z1] of [[28, SX0, 0, 3.14], [SXT, 35, 0, 3.14], [SX0, SXT, 0, 0.17], [SX0, SXT, 2.97, 3.14]]) floor(x0, x1, z0, z1, stoneTex, 2, '#a3a19c', LO);
+floor(33.86, 35, 3.14, 5.32, stoneTex, 2, '#a3a19c', LO);
 floor(28, 30.45, 7.68, 13, stoneTex, 2, '#a3a19c', LO); floor(32.55, 35, 7.68, 13, stoneTex, 2, '#a3a19c', LO);
 floorRects.push([28, 33.86, 3.14, 5.32, '#333'], [SX0, SXT, 0.17, 2.97, '#666']);
 // flat ceiling, open above the stair
@@ -1231,12 +1238,11 @@ wallH(4.82, 42, BL, [[42.05, 43.01]]); wallH(8.18, 42, 43.06, [[42.05, 43.01]]);
 wallV(43.06, 4.82, 8.18);
 // toilets copied from the 4e, with light gray tiles
 TILE_CUR = TILE_GRAY; buildRestrooms(); TILE_CUR = TILE;
-// the stairwell on the 3e: you arrive from flight B next to the stairwell door; the space under the landing / flight A start is closed off
+// the stairwell on the 3e: you arrive from flight B (z < SZM) next to the stairwell door, turn round on the landing and go on down
+// flight A to the 2e (z > SZM). The open stairs are walled off except the 0.55 m at the top of both flights.
 colliders.push([28.0, SXT-0.55, 0.17, 2.97, 2]);
-// wall under flight A (the flight up to the 4e): closes the space under the stairs on the 3e, there is no floor further down
-box(33.81, 33.91, 0, -LO-0.37, SZM+0.02, 3.09, WALL);   // in line with the stair hallway wall (x = 33.86); BY = LO here, so heights are 3e-relative
-box(33.91, SXT, -LO-0.46, -LO-0.37, SZM+0.02, 3.09, WALL);   // close the small gap up to the first tread
-colliders.push([33.81, 33.91, SZM, 3.14, 2]);
+stairFlights();   // 3e → 2e (BY = LO here)
+box(34.95, 35.05, -0.46, 0, 0, 3.14, WALL); box(SX0, 35.0, -0.46, 0, 3.09, 3.19, WALL);   // close the slab gap in the right and back walls
 BY = 0; LVL = 0;
 sign('3e verdiep', 34.94, LO+2.45, 6.5, BX, 1.0); sign('Entrance (3e)', 35.06, LO+2.45, 6.5, FX, 1.0);
 sign('Vlasmarkt', 37.5, LO+2.35, 4.89, FZ, 0.75); sign('Dulle Griet', 41.0, LO+2.35, 4.89, FZ, 0.8);
@@ -1252,8 +1258,9 @@ const LO2 = 2*LO, MW2 = mapWalls.length, FR2 = floorRects.length;
 BY = LO2; LVL = 5;
 floor(0, 50, 0, 13, carpetTex, 0, '#3d5f96', LO2);
 floor(28, 35, 5.32, 7.68, stoneTex, 2, '#a3a19c', LO2);
-floorRects.push([28, 35, 0, 5.32, '#333'], [28, 35, 7.68, 13, '#333']);   // lift shafts and the closed core
-ceiling(0, 50, 0, 13, LO2+2.6);
+for (const [x0, x1, z0, z1] of [[SXT, 35, 0, 3.14], [33.86, 35, 3.14, 5.32]]) floor(x0, x1, z0, z1, stoneTex, 2, '#a3a19c', LO2);   // stair landing and stair hallway
+floorRects.push([28, 33.86, 3.14, 5.32, '#333'], [28, SX0, 0, 3.14, '#333'], [28, 35, 7.68, 13, '#333'], [SX0, SXT, 0.17, 2.97, '#666']);   // lift shafts, the closed core, the stairs
+for (const [x0, x1, z0, z1] of [[0, 50, 3.14, 13], [0, SX0, 0, 3.14], [SXT, 50, 0, 3.14], [SX0, SXT, 0, 0.17], [SX0, SXT, 2.97, 3.14]]) ceiling(x0, x1, z0, z1, LO2+2.6);   // open over the stairs
 const inCore = (x, z) => x > 27.9 && x < 35.1 && (z < 5.32 || z > 7.68);
 for (let x=1.2; x<50; x+=2.4) for (const z of [1.5, 3.8, 6.5, 9.2, 11.5]){ if (!inCore(x, z)) ceilLight(x, LO2+2.6, z); }
 for (let x=2.4; x<49; x+=2.4) for (const [z, k] of [[1.5, 2], [3.8, 0], [6.5, 1], [9.2, 0], [11.5, 2]]){ if (!inCore(x, z)) ceilFit(k, x, LO2+2.6, z); }
@@ -1273,12 +1280,33 @@ for (const x of [0, 7, 14, 21, 28, 35, 42, BL]) for (const z of [0, 13]){   // p
 // the lift lobby: lift doors on the z = 5.32 wall, a plain back wall, double doors to both halls
 wallV(28, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(28, 1, true);   // closed: the west hall is the paintball arena, enter with E (paint.js)
 wallV(35, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(35, -1);
-wallH(5.32, 28, 35, [[29.23, 30.46, 2.1], [31.5, 32.73, 2.1]]); wallH(7.68, 28, 35);
+wallH(5.32, 28, 33.86, [[29.23, 30.46, 2.1], [31.5, 32.73, 2.1]]); wallH(5.32, 33.86, 35, [[33.95, 34.91]]); wallH(7.68, 28, 35);
+// the stairwell (same as on the 3e): stairwell door at z = 3.14, a short stair hallway, its door into the lift lobby
+wallH(3.14, 28, 35, [[33.86, 34.82]]); wallV(33.86, 3.14, 5.32); wallV(30.98, 3.14, 5.32);
+box(SX0-0.05, SX0+0.05, 0, -LO, 0, 3.14, WALL);                                              // the stair shaft's left wall goes on down
+colliders.push([28.0, SXT-0.55, 0.17, 2.97, 5]);                                            // you arrive from flight B; only its top 0.55 m is open
+// the 2e is the lowest floor: a wall under flight A closes off the space under the stairs (move this down when a floor is added below)
+box(33.81, 33.91, 0, -LO-0.37, SZM+0.02, 3.09, WALL); box(33.91, SXT, -LO-0.46, -LO-0.37, SZM+0.02, 3.09, WALL);
+colliders.push([33.81, 33.91, SZM, 3.14, 5]);
 for (const [a, b] of [[29.23, 30.46], [31.5, 32.73]]){ box(a, b, 0, 2.1, 5.25, 5.3, METAL, true); box((a+b)/2-0.005, (a+b)/2+0.005, 0, 2.1, 5.24, 5.31, FRAME); box(b+0.08, b+0.16, 1.1, 1.28, 5.36, 5.39, FRAME); }
 BY = 0; LVL = 0;
 sign('2e verdiep', 34.94, LO2+2.45, 6.5, BX, 1.0); sign('East wing (2e)', 35.06, LO2+2.45, 6.5, FX, 1.0);
-sign('Paintball arena', 28.06, LO2+2.45, 6.5, FX, 1.1, '#c0392b'); sign('Lift', 29.85, LO2+2.35, 5.38, FZ, 0.5); sign('Lift', 32.12, LO2+2.35, 5.38, FZ, 0.5);
+sign('Paintball arena', 28.06, LO2+2.45, 6.5, FX, 1.1, '#c0392b'); sign('Stairs', 34.43, LO2+2.35, 5.39, FZ, 0.7); sign('Lift', 29.85, LO2+2.35, 5.38, FZ, 0.5); sign('Lift', 32.12, LO2+2.35, 5.38, FZ, 0.5);
 const L2_WALLS = mapWalls.splice(MW2), L2_RECTS = floorRects.splice(FR2);
+// ---------- the stairwell flights, one row per storey: m = the movement mode while on them, top = the upper floor's height,
+// up / down = the modes (= levels) of the floors above and below. Adding a floor: build its stairFlights() and add a row here.
+const FLIGHTS = {4: {top: 0, up: 0, down: 2}, 6: {top: LO, up: 2, down: 5}};
+// on a floor: the top 0.55 m of the flights (x SXT-0.55 → SXT) takes you onto flight A going down (z > SZM) or flight B going up (z < SZM);
+// on the flights: stepping out at x ≥ SXT puts you on the floor above (flight A side) or below (flight B side). Returns true while it applies.
+function stairMode(){
+  const on = FLIGHTS[mode]; if (on){ if (px >= SXT) mode = pz > SZM ? on.up : on.down; return true; }
+  if (!(px > SXT-0.55 && px < SXT)) return false;
+  for (const m in FLIGHTS){ const f = FLIGHTS[m];
+    if (f.up === mode && pz > SZM+R && pz < 2.97-R){ mode = +m; return true; }
+    if (f.down === mode && pz > 0.17+R && pz < SZM-R){ mode = +m; return true; } }
+  return false;
+}
+for (const m of [6]) colliders.push([SX0-0.1, SX0, 0.17, 2.97, m], [SXL, SXT, SZM-0.02, SZM+0.02, m], [SX0-0.1, SXT+0.05, 0.07, 0.2, m], [SX0-0.1, SXT+0.05, 2.94, 3.07, m]);   // walls while on the stairs (mode 4 above)
 
 // ---------- merge everything built so far (it never moves) into one mesh per material per 10 m stretch and floor ----------
 // Thousands of small meshes become a few hundred, so all the detail above costs very few draw calls. Doors and avatars are added later and stay separate.
@@ -1385,6 +1413,9 @@ addDoor('x', 4.82, 42.05, 43.01, DOORH, 2, -1, 'a', 'Gravensteen');
 addDoor('x', 8.18, 36.02, 36.98, DOORH, 2, 1, 'b', 'Kitchen');   // hinged on the Belfort side
 addDoor('x', 8.18, 39.52, 40.48, DOORH, 2, 1, 'a', 'Belfort');
 addDoor('x', 8.18, 42.05, 43.01, DOORH, 2, 1, 'a', 'Service Desk');
+// 2e verdiep
+addDoor('x', 3.14, 33.86, 34.82, DOORH, 5, 1, 'b', 'Stairwell', DOOR_BLUE);
+addDoor('x', 5.32, 33.95, 34.91, DOORH, 5, -1, 'b', 'Stair hallway', DOOR_BLUE);
 function doorAngle(d, a){ d.g.rotation.y = d.axis === 'x' ? -d.sg*d.swing*a : d.sg*d.swing*a; }
 function doorLevel(){ return mode === 5 ? 5 : mode === 2 ? 2 : mode === 1 ? 1 : mode === 0 ? 0 : -1; }
 
@@ -1541,7 +1572,8 @@ function zoneName(x, z){
   if (GAME.zoneOverride) return GAME.zoneOverride;   // parkour.js: 'Rooftop parkour' while you are out on the course
   if (mode === 3) return 'Stairs (kitchen)';
   if (mode === 4) return 'Stairs (4e ↔ 3e)';
-  if (mode === 5) return x < 28 ? 'Paintball arena (2e)' : x > 35 ? 'East wing (2e)' : 'Lift lobby (2e)';
+  if (mode === 6) return 'Stairs (3e ↔ 2e)';
+  if (mode === 5) return x < 28 ? 'Paintball arena (2e)' : x > 35 ? 'East wing (2e)' : z < 3.14 ? 'Stairwell (2e)' : z < 5.32 ? 'Stair hallway (2e)' : 'Lift lobby (2e)';
   if (mode === 2){ if (x < 28) return 'West wing (3e)';   // the part beyond the Entrance: only the shell for now
     if (x >= 35 && x <= 42 && z >= 8.18) return x < 38.0 ? 'Kitchen (3e)' : 'Belfort'; if (x >= 35 && x <= 42 && z <= 4.82) return x < 38.0 ? 'Vlasmarkt' : 'Dulle Griet';
     if (x > 42 && z < 4.82) return 'Gravensteen'; if (x > 42 && (z > 8.18 || x > 43.06)) return 'Service Desk'; if (x >= 35) return '3e verdiep'; if (z < 3.14) return 'Stairwell (3e)'; if (x > 33.86 && z < 5.32) return 'Stair hallway (3e)';
@@ -1575,14 +1607,12 @@ function frame(){
   if (dx && !blocked(px+dx, pz)) px += dx;
   if (dz && !blocked(px, pz+dz)) pz += dz;
   if (GAME.feetY != null) {}   // parkour.js moves you over the roofs: no stair or level changes meanwhile
-  else if (mode === 0 && px > SXT-0.55 && px < SXT && pz > SZM+R && pz < 2.97-R) mode = 4;            // 4e → stairwell flight A
-  else if (mode === 2 && px > SXT-0.55 && px < SXT && pz > 0.17+R && pz < SZM-R) mode = 4;        // 3e → stairwell flight B
-  else if (mode === 4){ if (px >= SXT) mode = pz > SZM ? 0 : 2; }
+  else if (stairMode()) {}                                                                          // the stairwell (all storeys)
   else if (mode === 0 && px > ST1-0.37 && px < ST1 && pz > STZ0+R && pz < STZ1-R) mode = 3;
   else if (mode === 1 && px > MX2) mode = 3;
   else if (mode === 3){ if (px <= MX2) mode = 1; else if (px >= ST1) mode = 0; }
-  const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 5 ? LO2 : mode === 4 ? stairY(px, pz) : 0;
-  const lvNow = mode === 5 ? 5 : (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
+  const FL = FLIGHTS[mode], fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 5 ? LO2 : FL ? FL.top + stairY(px, pz) : 0;
+  const lvNow = FL ? (fy < FL.top - SH ? FL.down : FL.up) : mode === 5 ? 5 : mode === 2 ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
   // GAME.eyeY: a minigame sets the eye height (race.js: seated)
   camera.position.set(px, GAME.eyeY != null ? GAME.eyeY : seat ? seat.base + seat.h + 0.72 : EYE - 0.8*crouchK + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
