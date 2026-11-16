@@ -49,6 +49,7 @@ body.race-pads .tbtn,body.dance-pads .tbtn,body.race-pads #hint,body.dance-pads 
 <option value="43.6,5.6,0">Couch &amp; booth</option>
 <option value="34.4,4.6,0">Stairs</option>
 <option value="31.5,6.5,90,2">Entrance (3e)</option>
+<option value="14,6.5,90,2">West wing (3e)</option>
 <option value="39,6.5,-90,2">3e verdiep</option>
 <option value="36.5,9.2,180,2">Kitchen (3e)</option>
 <option value="40.0,9.2,180,2">Belfort (3e)</option>
@@ -1095,8 +1096,25 @@ for (const x of [28, 35, 42, BL]) for (const z of [0, 13]){
   const x0 = (x === 35 && z === 13) ? 35.05 : Math.max(28, x-0.35), x1 = (x === 28 && z === 13) ? 28.0 : Math.min(BL, x+0.35), za = z === 0 ? 0 : 12.6, zb = z === 0 ? 0.4 : 13;
   if (x1 > x0) box(x0, x1, 0, 2.6, za, zb, mat(0xdedbd3), true);
 }
-// Entrance (3e): same walls as upstairs. West wall x = 28: double door with both leaves closed (nothing beyond is built)
-wallV(28, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(28, 1, true);
+// Entrance (3e): same walls as upstairs. West wall x = 28: double door (one leaf open) into the west part of the 3e verdiep
+wallV(28, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(28, 1);
+// ---------- west part of the 3e verdiep (x 0–28): only the shell for now, carpet, outer walls with the window band, pillars,
+// the end wall with an emergency door and a flat ceiling with lights; nothing inside yet ----------
+floor(0, 28, 0, 13, carpetTex, 0, '#3d5f96', LO);
+ceiling(0, 28, 0, 13, LO+2.6);
+for (let x=1.2; x<27.5; x+=2.4) for (const z of [1.5, 3.8, 6.5, 9.2, 11.5]) ceilLight(x, LO+2.6, z);
+for (let x=2.4; x<27; x+=2.4) for (const [z, k] of [[1.5, 2], [3.8, 0], [6.5, 1], [9.2, 0], [11.5, 2]]) ceilFit(k, x, LO+2.6, z);
+for (const side of [-1, 1]){ wallBand(side, 0, 28, -LO); mapWalls.push([0, side<0?0:13, 28, side<0?0:13, 2]); }
+box(-0.25, 0, 0, -LO, -0.25, EXIT0, WALL, true); box(-0.25, 0, 0, -LO, EXIT1, 13.25, WALL, true); box(-0.25, 0, EXITH, -LO, EXIT0, EXIT1, WALL);   // end wall x = 0
+{ const xm = -0.12;   // glass emergency door (closed), like at the other end
+  box(xm-0.04, xm+0.04, 0, EXITH, EXIT0, EXIT0+0.05, FRAME); box(xm-0.04, xm+0.04, 0, EXITH, EXIT1-0.05, EXIT1, FRAME); box(xm-0.04, xm+0.04, EXITH-0.05, EXITH, EXIT0, EXIT1, FRAME);
+  box(xm-0.01, xm+0.01, 0.12, EXITH-0.05, EXIT0+0.05, EXIT1-0.05, WINGLASS, true); box(0.04, 0.08, 1.0, 1.05, EXIT0+0.1, EXIT1-0.1, METAL);
+  sign('Emergency exit', 0.02, LO+2.4, 6.5, FX, 0.9, '#1e8f4e'); }
+mapWalls.push([0, 0, 0, 13, 2]);
+for (const x of [0, 7, 14, 21]) for (const z of [0, 13]){   // pillars along both long walls, every 7 m
+  const x0 = Math.max(0, x-0.35), x1 = x+0.35, za = z === 0 ? 0 : 12.6, zb = z === 0 ? 0.4 : 13;
+  box(x0, x1, 0, 2.6, za, zb, mat(0xdedbd3), true);
+}
 wallV(35, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(35, -1);
 wallH(3.14, 28, 35, [[33.86, 34.82]]); wallV(33.86, 3.14, 5.32); wallV(30.98, 3.14, 5.32);
 wallH(5.32, 28, 33.86, [[29.23, 30.46, 2.1], [31.5, 32.73, 2.1]]); wallH(5.32, 33.86, 35, [[33.95, 34.91]]);
@@ -1479,7 +1497,8 @@ const rooms = [
 function zoneName(x, z){
   if (mode === 3) return 'Stairs (kitchen)';
   if (mode === 4) return 'Stairs (4e ↔ 3e)';
-  if (mode === 2){ if (x >= 35 && x <= 42 && z >= 8.18) return x < 38.0 ? 'Kitchen (3e)' : 'Belfort'; if (x >= 35 && x <= 42 && z <= 4.82) return x < 38.0 ? 'Vlasmarkt' : 'Dulle Griet';
+  if (mode === 2){ if (x < 28) return 'West wing (3e)';   // the part beyond the Entrance: only the shell for now
+    if (x >= 35 && x <= 42 && z >= 8.18) return x < 38.0 ? 'Kitchen (3e)' : 'Belfort'; if (x >= 35 && x <= 42 && z <= 4.82) return x < 38.0 ? 'Vlasmarkt' : 'Dulle Griet';
     if (x > 42 && z < 4.82) return 'Gravensteen'; if (x > 42 && (z > 8.18 || x > 43.06)) return 'Service Desk'; if (x >= 35) return '3e verdiep'; if (z < 3.14) return 'Stairwell (3e)'; if (x > 33.86 && z < 5.32) return 'Stair hallway (3e)';
     if (z > 7.68 && x < 30.45) return 'Men (3e)'; if (z > 7.68 && x > 32.55) return 'Ladies (3e)'; if (z > 11.17) return 'Utility (3e)'; return 'Entrance (3e)'; }
   if (mode === 1) return x > MX1 ? 'Mezzanine walkway' : (z < MMID ? 'Graslei (upstairs)' : 'Korenlei (upstairs)');
