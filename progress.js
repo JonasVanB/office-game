@@ -147,6 +147,14 @@ export const ACHIEVEMENTS = [
     ['q_streak', '🔥', 'On a streak', 'Complete all daily quests 3 days in a row', 60],
     ['q_10', '📜', 'Questing', 'Complete 10 daily quests', 40, {stat: 'quests', n: 10}],
   ]),
+  ...A('The Mole', [
+    ['m_enter', '🚪', 'Who goes there?', 'Enter The Mole room on the 3e', 5],
+    ['m_play', '🕵️', 'Trust no one', 'Play a game of The Mole', 15],
+    ['m_windev', '👩‍💻', 'Clean code', 'Win as a Developer', 30],
+    ['m_winsab', '🦹', 'It’s a feature', 'Win on the Saboteur team', 30],
+    ['m_mole', '🕵️', 'Deep cover', 'Win as the Mole', 60],
+    ['m_villain', '😈', 'Mwahaha', 'Strike a villain pose (V)', 5],
+  ]),
   ...A('Orbimons', [
     ['o_first', '🟣', 'Gotta catch one', 'Catch your first Orbimon', 15],
     ['o_5', '🟣', 'Collector', 'Catch 5 different Orbimons', 30],

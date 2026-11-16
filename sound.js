@@ -99,6 +99,9 @@ const FX = {
     const w = ctx.createGain(); w.connect(d); env(w, t, 0.3, 1, 0.6, 0.12*v); noise(w, t, 2, 'bandpass', 900, 2); },
   // evil laugh, low and slow
   cackle(v, pan){ talk(v, pan, 7, true, 90); },
+  // the mole: a sad trombone when someone gets fired (wah wah wah waaah)
+  trombone(v, pan){ const d = out(pan), t = ctx.currentTime; [[294, 0], [277, 0.45], [262, 0.9], [247, 1.35]].forEach(([f, o], i) => {
+    const osc = tone(d, t + o, i === 3 ? 1.4 : 0.42, f, 'sawtooth', 0.09*v, 0.03); if (i === 3){ const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 5; lg.gain.value = 6; l.connect(lg); lg.connect(osc.frequency); l.start(t + o); l.stop(t + o + 1.4); } }); },
   // someone running away
   run(v, pan){ const d = out(pan); let t = ctx.currentTime; for (let i = 0; i < 10; i++){ const g = ctx.createGain(); g.connect(d); env(g, t, 0.003, 0.02, 0.08, 0.35*v*(1 - i/12)); noise(g, t, 0.15, 'lowpass', 700); t += 0.27; } },
   // darts: a dart whooshing off the hand, and the thud when it hits (board or wall)

@@ -1097,7 +1097,7 @@ for (const x of [28, 35, 42, BL]) for (const z of [0, 13]){
   if (x1 > x0) box(x0, x1, 0, 2.6, za, zb, mat(0xdedbd3), true);
 }
 // Entrance (3e): same walls as upstairs. West wall x = 28: double door (one leaf open) into the west part of the 3e verdiep
-wallV(28, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(28, 1);
+wallV(28, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(28, 1, true);   // closed: the west wing is The Mole game room, enter with E (mole.js)
 // ---------- west part of the 3e verdiep (x 0–28): only the shell for now, carpet, outer walls with the window band, pillars,
 // the end wall with an emergency door and a flat ceiling with lights; nothing inside yet ----------
 floor(0, 28, 0, 13, carpetTex, 0, '#3d5f96', LO);
@@ -1565,6 +1565,7 @@ window.dispatchEvent(new Event('game-ready'));
 <script type="module" src="boards.js"></script>
 <script type="module" src="darts.js"></script>
 <script type="module" src="kiss.js"></script>
+<script type="module" src="mole.js"></script>
 <script type="module" src="boxing.js"></script>
 <script type="module" src="dance.js"></script>
 <script type="module" src="emotes.js"></script>

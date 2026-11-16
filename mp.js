@@ -186,6 +186,7 @@ function onPresence(type, key, v){
   }
   r.tx = v.x; r.ty = v.y || 0; r.tz = v.z; r.tr = v.r || 0; r.l = v.l || 0; r.name = name; r.color = av.shirt; r.seen = performance.now();
   r.av = av; r.kb = v.kb || null; r.kh = v.kh ? 1 : 0; r.ks = v.ks || 0; r.kg = v.kg || null;   // kiss.js: beanbag seat, holding, start time, game state
+  r.mr = v.mr || null; r.mj = v.mj || 0; r.ma = v.ma || null; r.mg = v.mg || null; r.mk = v.mk || null; r.vl = v.vl || 0;   // mole.js: room role, join time, action, game state (host), private notes (host), villain pose
   r.key = key; r.si = +v.si || 0; r.pe = v.pe || null; r.bx = v.bx || null; r.dd = v.dd || null; r.em = v.em || null; r.rc = v.rc || null;   // sitting (seat height), the toilet game (toilet.js), boxing (boxing.js), dancing (dance.js)
   // a new chat message (c = text, ct = when): bubble above their head and a line in the chat log
   if (v.c && v.ct && v.ct !== r.ct){ r.ct = v.ct; if (net.now() - v.ct < 15000) showChat(r, name, String(v.c).slice(0, MAXCHAT)); }
@@ -379,7 +380,8 @@ async function main(){
   window.__onDoor = (i, open) => { if (i >= 0) net.setDoor(i, open); };
   // the Orbid sweater (progress.js unlocks it): toggle it on your saved character; others see it through your presence data
   // kiss.js (Stiekem kussen) works with the other players' presence
-  window.__mpRemotes = () => [...remotes.entries()].map(([key, r]) => ({key, name: r.name, av: r.av, kb: r.kb, kh: r.kh, ks: r.ks, kg: r.kg, seen: r.seen}));
+  window.__mpRemotes = () => [...remotes.entries()].map(([key, r]) => ({key, name: r.name, av: r.av, kb: r.kb, kh: r.kh, ks: r.ks, kg: r.kg, seen: r.seen,
+    x: r.x, y: r.y, z: r.z, l: r.l || 0, mr: r.mr, mj: r.mj, ma: r.ma, mg: r.mg, mk: r.mk, vl: r.vl}));
   window.__mpSend = d => { if (joined) net.send(d); };
   window.__myAvatar = () => profile ? profile.avatar : null;
   window.__myKey = () => net.myKey;
