@@ -108,6 +108,15 @@ const FX = {
   whoosh(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.03, 0.05, 0.12, 0.12*v); const n = noise(g, t, 0.25, 'bandpass', 1800, 1.5); n.f.frequency.setValueAtTime(2600, t); n.f.frequency.exponentialRampToValueAtTime(900, t + 0.2); },
   thud(v, pan, wall){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.02, 0.12, 0.5*v); noise(g, t, 0.15, 'lowpass', wall ? 900 : 1600);
     tone(d, t, 0.12, wall ? 140 : 220, 'sine', 0.25*v); },
+  // parkour.js: a footstep on a roof (arg = surface: 0 gravel/concrete, 1 metal grating), a landing (v = how hard), a hand grab, a slide
+  pkStep(v, pan, metal){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.015, 0.07, 0.32*v); noise(g, t, 0.1, metal ? 'bandpass' : 'lowpass', metal ? 1900 + Math.random()*500 : 650 + Math.random()*250, metal ? 3 : 0);
+    if (metal) tone(d, t, 0.09, 420 + Math.random()*80, 'triangle', 0.05*v); },
+  pkLand(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.03, 0.18 + 0.12*v, 0.55*v); noise(g, t, 0.35, 'lowpass', 420 + 300*v); tone(d, t, 0.18, 70 + 30*v, 'sine', 0.35*v); },
+  pkGrab(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.01, 0.06, 0.4*v); noise(g, t, 0.08, 'bandpass', 1300, 1.2); tone(d, t, 0.1, 180, 'sine', 0.12*v); },
+  pkSlide(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.02, 0.35, 0.35, 0.22*v); const n = noise(g, t, 0.8, 'bandpass', 900, 0.8); n.f.frequency.setValueAtTime(1300, t); n.f.frequency.exponentialRampToValueAtTime(500, t + 0.7); },
+  // parkour.js: a checkpoint (two rising notes) and the finish (a short fanfare)
+  pkCheck(v){ const d = out(0), t = ctx.currentTime; tone(d, t, 0.25, 880, 'triangle', 0.18*v); tone(d, t + 0.09, 0.4, 1320, 'triangle', 0.16*v); },
+  pkFinish(v){ const d = out(0), t = ctx.currentTime; [[523, 0], [659, 0.1], [784, 0.2], [1047, 0.32]].forEach(([f, o]) => { tone(d, t + o, o > 0.3 ? 0.9 : 0.25, f, 'triangle', 0.2*v); tone(d, t + o, 0.3, f/2, 'sine', 0.08*v); }); },
   // bust: a low double buzz
   buzz(v, pan){ const d = out(pan), t = ctx.currentTime; for (const o of [0, 0.22]) tone(d, t + o, 0.18, 110, 'square', 0.08*v, 0.01); },
   // crowd cheer: lots of voices and a noisy swell (180, a checkout)
@@ -173,6 +182,8 @@ function makeLoop(kind){
     const l = ctx.createOscillator(); l.type = 'square'; l.frequency.value = 1.1; const lg = ctx.createGain(); lg.gain.value = 160; l.connect(lg); lg.connect(o.frequency); l.start(); }
   else if (kind === 'siren'){ const o = ctx.createOscillator(); o.type = 'sawtooth'; const og = ctx.createGain(); og.gain.value = 0.18; o.connect(og); og.connect(g); o.start();
     const l = ctx.createOscillator(); l.frequency.value = 0.6; const lg = ctx.createGain(); lg.gain.value = 350; l.connect(lg); lg.connect(o.frequency); o.frequency.value = 900; l.start(); }
+  else if (kind === 'wind'){ noise(g, t, BIG, 'bandpass', 520, 0.6); noise(g, t, BIG, 'highpass', 3200); }   // parkour.js: wind that grows with your speed
+  else if (kind === 'zip'){ noise(g, t, BIG, 'bandpass', 2600, 4); const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 95; const og = ctx.createGain(); og.gain.value = 0.05; o.connect(og); og.connect(g); o.start(); }   // a trolley on the zipline
   else if (kind === 'stream' || kind === 'splash'){   // pouring into water (stream) or onto tiles (splash)
     const n = noise(g, t, BIG, 'bandpass', kind === 'stream' ? 2200 : 4200, kind === 'stream' ? 1.2 : 0.8);
     const l = ctx.createOscillator(); l.frequency.value = 7; const lg = ctx.createGain(); lg.gain.value = kind === 'stream' ? 500 : 900; l.connect(lg); lg.connect(n.f.frequency); l.start(); }
@@ -182,5 +193,5 @@ function makeLoop(kind){
 export function loop(kind, vol, pan = 0){
   if (!ctx) return; let L = loops[kind];
   if (!L){ if (vol < 0.005) return; L = loops[kind] = makeLoop(kind); }
-  const t = ctx.currentTime; L.g.gain.setTargetAtTime(Math.max(0, vol), t, kind === 'stream' || kind === 'splash' ? 0.05 : 0.25); if (L.p) L.p.pan.setTargetAtTime(pan, t, 0.1);
+  const t = ctx.currentTime; L.g.gain.setTargetAtTime(Math.max(0, vol), t, kind === 'stream' || kind === 'splash' || kind === 'wind' || kind === 'zip' ? 0.06 : 0.25); if (L.p) L.p.pan.setTargetAtTime(pan, t, 0.1);
 }

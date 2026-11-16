@@ -44,6 +44,13 @@
         ".validate": "newData.hasChildren(['q', 'n']) && newData.child('q').isString() && newData.child('q').val().length <= 70 && newData.child('n').isString() && newData.child('n').val().length <= 20"
       }
     },
+    "parkour": {
+      ".read": true,
+      "$id": {
+        ".write": "$id.length <= 64",
+        ".validate": "newData.hasChildren(['t', 'n']) && newData.child('t').isNumber() && newData.child('t').val() >= 8000 && newData.child('t').val() <= 1800000 && newData.child('n').isString() && newData.child('n').val().length <= 20 && (!data.exists() || newData.child('t').val() <= data.child('t').val())"
+      }
+    },
     "doors": {
       ".read": true,
       "$i": {
