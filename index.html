@@ -87,7 +87,7 @@ window.__isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches
 document.getElementById('howto').textContent = window.__isTouch
   ? 'Drag on the left side to walk (a joystick appears). Drag on the right side to look around.'
   : 'Move the mouse to look around (no clicking needed). WASD or arrow keys to walk, Shift to run, E to open or close the door in front of you. Press Esc to pause and get your mouse back.';
-document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · Space: jump · E: use · F: flashlight · Q: progress · Enter: chat · M: sound · Esc: pause';
+document.getElementById('hint').textContent = window.__isTouch ? 'Left: walk · Right: look' : 'Mouse: look · WASD walk · Shift run · Space: jump · C: crouch · E: use · F: flashlight · Q: progress · Enter: chat · M: sound · Esc: pause';
 window.__showErr = function(m){ var e = document.getElementById('msg'); e.textContent = m; e.style.display = 'block'; };
 function __start(ev){ if (ev) ev.preventDefault(); document.getElementById('start').style.display = 'none'; window.__started = true; window.dispatchEvent(new Event('office-start')); if (window.__onStart) window.__onStart(); else if (!window.__ready) window.__showErr('Loading 3D… one moment.'); }
 document.getElementById('go').addEventListener('click', __start);
@@ -1396,6 +1396,9 @@ function toggleDoor(){ const d = nearDoor; if (!d) return; if (d.target > 0){ co
 // A run-up (Shift + forward) jumps higher. Pressing jump again in the air goes to GAME.onAirJump (postit.js: wall kick, stick a post-it).
 // GAME.onTakeoff may change the take-off speed (postit.js: run-up and take-off line); GAME.boostHop adds upward speed in the air.
 let hopY = 0, hopV = 0;
+// crouching / sneaking (C toggles): the view drops low (look under desks, reach the floor) and you move slower
+let crouch = false, crouchK = 0;
+GAME.toggleCrouch = () => { if (started && !paused && !GAME.controlLock) crouch = !crouch; };
 function hop(){
   if (!started || paused || GAME.controlLock || seat) return;
   if (hopY > 0 || hopV > 0){ if (GAME.onAirJump) GAME.onAirJump(hopY, hopV); return; }
@@ -1445,7 +1448,7 @@ GAME.uses.push({
 });
 function look(dx, dy, s){ yaw -= dx*s; pitch -= dy*s; pitch = Math.max(-1.45, Math.min(1.45, pitch)); }
 const keys = {};
-addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ useOrDoor(); return; } if (e.code === 'Space'){ e.preventDefault(); if (!e.repeat) hop(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
+addEventListener('keydown', e => { const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'SELECT' || tg === 'TEXTAREA') return; if (e.code === 'Escape'){ pause(); return; } if (paused) return; if (e.code === 'KeyE' && !e.repeat){ useOrDoor(); return; } if (e.code === 'Space'){ e.preventDefault(); if (!e.repeat) hop(); return; } if (e.code === 'KeyC' && !e.repeat){ GAME.toggleCrouch(); return; } keys[e.code] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; pause(); });
 // Mouse look without clicking: the "Start walking" click captures the mouse (pointer lock).
@@ -1522,7 +1525,9 @@ function frame(){
     const kl = Math.hypot(fwd, str); if (kl > 1){ fwd /= kl; str /= kl; }
     fwd -= jvy; str += jvx;
   }
-  const speed = (keys.ShiftLeft || keys.ShiftRight) ? 4.2 : 2.3;
+  if (GAME.controlLock || seat) crouch = false;
+  crouchK += ((crouch ? 1 : 0) - crouchK)*Math.min(1, dt*10);
+  const speed = ((keys.ShiftLeft || keys.ShiftRight) && !crouch ? 4.2 : 2.3)*(crouch ? 0.45 : 1);
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
   const dx = (fwd*fx + str*rx)*speed*dt, dz = (fwd*fz + str*rz)*speed*dt;
   if (dx && !blocked(px+dx, pz)) px += dx;
@@ -1537,8 +1542,8 @@ function frame(){
   const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
   // GAME.eyeY: a minigame sets the eye height (race.js: seated)
-  camera.position.set(px, GAME.eyeY != null ? GAME.eyeY : seat ? seat.base + seat.h + 0.72 : EYE + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
-  const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone; st.si = seat ? seat.h : 0;
+  camera.position.set(px, GAME.eyeY != null ? GAME.eyeY : seat ? seat.base + seat.h + 0.72 : EYE - 0.8*crouchK + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
+  const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.crouch = crouchK > 0.5; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone; st.si = seat ? seat.h : 0;
   if (window.__onFrame){ try { window.__onFrame(dt); } catch (e){ console.error('mp.js frame:', e); } }   // a module error must never freeze the game
   if (window.__onFrameClock) window.__onFrameClock(dt);
   camera.updateMatrixWorld();

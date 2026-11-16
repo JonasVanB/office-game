@@ -68,7 +68,7 @@ export const MONS = [
 const SPOTS = {
   mayo: {p: [40.12, 0.95, 10.08, 0], in: 'fridge4'}, tzatziki: {p: [35.87, 0.9, 8.63, 2], in: 'fridge3'},
   vomit: {p: [28.45, 0, 10.2, 0]}, car: {p: [31.5, 0, 12.45, 2]}, bugsy: {p: [2.0, 0, 10.4, 0]},
-  koffie: {p: [39.53, 1.54, 8.62, 0], in: 'wall4b'}, wifi: {p: [21.0, 2.25, 10.3, 0], reach: 1.0}, postit: {p: [49.84, 2.82, 6.86, 0], reach: 0.95},
+  koffie: {p: [39.53, 1.54, 8.62, 0], in: 'wall4b'}, wifi: {p: [21.0, 2.3, 8.65, 0], jump: true}, postit: {p: [49.84, 2.82, 6.86, 0], jump: true},   // high up: only reachable while jumping
   dart: {p: [35.5, 1.54, 11.6, 2], in: 'wall3c'}, printo: {p: [14.45, 0, 9.55, 0]}, server: {p: [27.25, 0, 12.5, 0]},
   ghostie: {p: [37.9, 0.62, 12.2, 0], when: 'spooky'}, dust: {p: [49.4, 0.9, 5.56, 0], in: 'closet7'}, draakje: {p: [40.2, 0.77, 10.6, 2]},
   graven: {p: [49.3, 0, 0.75, 2]}, neon: {p: [0.8, 0, 12.2, 2], when: 'night'}, tegel: {p: [6.955, 0.91, 10.2, 0]},
@@ -187,11 +187,18 @@ export function initOrbimons({G, prog, me}){
     const s = G.state; if (!s.started || G.controlLock) return null;
     G.camera.getWorldPosition(eye); const goldIds = goldenToday();
     let best = null, bd = 9;
+    // reach with your hands, not your eyes: up to half a metre above your head, down to the floor when crouching (C)
+    // or to knee height when standing; jump-only Orbimons (sp.jump) need you in the air
+    const floor = fY(s.lv), up = eye.y + 0.5, down = floor + (s.crouch ? 0 : 0.45);
     for (const o of live){
       if (o.poof || !wanted(o, goldIds) || !present(o) || o.sp.p[3] !== s.lv) continue;
-      const p = o.n.position, d = Math.hypot(eye.x - p.x, eye.y - (p.y + 0.12), eye.z - p.z), r = o.sp.reach || 1.6;
-      if (d < r && d < bd){ bd = d; best = {kind: 'mon', o, golden: goldIds.includes(o.m.id) && !gold(o.m.id)}; }
+      const p = o.n.position, ty = p.y + 0.12, vd = ty > up ? ty - up : ty < down ? down - ty : 0;
+      const d = Math.hypot(Math.hypot(eye.x - p.x, eye.z - p.z), vd), r = o.sp.reach || 1.35;
+      if (d >= r || d >= bd) continue;
+      if (o.sp.jump && !(s.hop > 0.12)){ if (!best) best = {kind: 'jump', o}; continue; }
+      bd = d; best = {kind: 'mon', o, golden: goldIds.includes(o.m.id) && !gold(o.m.id)};
     }
+    if (best && best.kind === 'jump' && Math.hypot(eye.x - best.o.n.position.x, eye.z - best.o.n.position.z) > 1.4) best = null;
     if (best) return best;
     for (const c of CONT){ if (c.lv !== s.lv || Math.abs(s.y - fY(c.lv)) > 1.2) continue; const d = Math.hypot(s.x - c.ctr[0], s.z - c.ctr[1]); if (d < 1.0 && d < bd){ bd = d; best = {kind: 'cont', c}; } }
     return best;
@@ -234,9 +241,10 @@ export function initOrbimons({G, prog, me}){
       if (!me()) return '';
       const n = nearest(); if (!n) return '';
       const act = window.__isTouch ? 'Tap' : 'Press E';
+      if (n.kind === 'jump') return `🦘 The Orbimon is too high: jump (Space) and ${act === 'Tap' ? 'tap' : 'press E'} in the air!`;
       return n.kind === 'mon' ? `${n.golden ? '✨ ' : '🟣 '}${act} to catch ${owned(n.o.m.id) ? n.o.m.name : 'the Orbimon'}!${n.golden ? ' It is GOLDEN!' : ''}` : `${act} to ${n.c.target ? 'close' : 'open'} the ${n.c.name}`;
     },
-    use(){ if (!me()) return false; const n = nearest(); if (!n) return false; if (n.kind === 'mon') catchMon(n); else toggle(n.c); return true; },
+    use(){ if (!me()) return false; const n = nearest(); if (!n) return false; if (n.kind === 'mon') catchMon(n); else if (n.kind === 'jump') return true; else toggle(n.c); return true; },
   });
 
   // ---------- the Orbidex: portraits rendered once, grey silhouettes until found ----------
@@ -275,5 +283,5 @@ export function initOrbimons({G, prog, me}){
     }
     return h + `</div><div class="note" style="margin-top:8px">${goldIds.some(id => !gold(id)) ? '✨ Rumour has it a golden Orbimon is around today…' : 'No new golden Orbimons for you today.'}</div>`;
   };
-  window.ORBI = {MONS, SPOTS, containers: CONT, goldenToday, live};   // for testing in the console
+  window.ORBI = {MONS, SPOTS, containers: CONT, goldenToday, live, nearest};   // for testing in the console
 }

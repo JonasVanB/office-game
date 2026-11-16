@@ -223,7 +223,7 @@ function chatUI(){
   });
   // touch screens: round buttons for chat and jumping
   if (window.__isTouch){
-    for (const [id, label, bottom, fn] of [['jumpBtn', '⤒', 96, () => G.jump && G.jump()], ['chatBtn', '💬', 162, () => joined && openChat()], ['emoteBtn', '😀', 228, () => joined && window.__openEmotes && window.__openEmotes()]]){
+    for (const [id, label, bottom, fn] of [['jumpBtn', '⤒', 96, () => G.jump && G.jump()], ['chatBtn', '💬', 162, () => joined && openChat()], ['emoteBtn', '😀', 228, () => joined && window.__openEmotes && window.__openEmotes()], ['crouchBtn', '⤓', 294, () => G.toggleCrouch && G.toggleCrouch()]]){
       const b = document.createElement('div'); b.id = id; b.className = 'tbtn'; b.textContent = label; b.style.bottom = bottom + 'px';
       b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fn(); }); document.body.appendChild(b);
     }
