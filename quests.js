@@ -46,7 +46,8 @@ export function questsFor(d){
 export function initQuests({G, prog, me}){
   let list = [], day = '', lastZone = '', lastKey = '';
   // P.q = {day, base: {stat: count at the start of the day}, zones: [..], done: {id: 1}, all: 0|1, streak, last: 'yyyy-mm-dd'}
-  const state = () => { const P = prog.P; if (!P.q || P.q.day !== day) newDay(); return P.q; };
+  // Firebase drops empty objects and arrays, so a saved {base: {}, zones: [], done: {}} comes back without them: fill the gaps
+  const state = () => { const P = prog.P; if (!P.q || P.q.day !== day) newDay(); const q = P.q; q.base = q.base || {}; q.zones = Array.isArray(q.zones) ? q.zones : Object.values(q.zones || {}); q.done = q.done || {}; return q; };
   function newDay(){
     const P = prog.P, old = P.q || {};
     P.q = {day, base: Object.assign({}, P.s), zones: [], done: {}, all: 0, streak: old.streak || 0, last: old.last || ''};
