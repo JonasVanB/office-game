@@ -95,9 +95,9 @@ async function firebaseNet(){
     saveProgress(id, d){ D.set(D.ref(db, 'progress/' + id), d).catch(e => console.warn('progress not saved:', e.message)); },
     onProgress(cb){ const p = D.ref(db, 'progress');
       D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('leaderboard not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
-    // parkour/<account id> = {t: best time in ms, n: name, s: checkpoint splits (ms), d: date}: the rooftop parkour leaderboard
-    setParkour(id, d){ D.set(D.ref(db, 'parkour/' + id), d).catch(e => console.warn('parkour time not saved:', e.message)); },
-    onParkour(cb){ const p = D.ref(db, 'parkour');
+    // parkour2/<account id> = {t: best time in ms, n: name, s: checkpoint splits (ms), d: date}: the rooftop parkour leaderboard (parkour/ held the times of the old, shorter course)
+    setParkour(id, d){ D.set(D.ref(db, 'parkour2/' + id), d).catch(e => console.warn('parkour time not saved:', e.message)); },
+    onParkour(cb){ const p = D.ref(db, 'parkour2');
       D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('parkour leaderboard not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
     // tiles/<panel>_<col>_<row> = {q, n, by, t}: quotes on the tile wall at desk 6
     setTile(k, d){ D.set(D.ref(db, 'tiles/' + k), d).catch(e => console.warn('tile not saved:', e.message)); },
@@ -150,8 +150,8 @@ function localNet(){
     async loadProgress(id){ try { return JSON.parse(localStorage.getItem('office.localProgress.' + id)); } catch (e){ return null; } },
     saveProgress(id, d){ try { localStorage.setItem('office.localProgress.' + id, JSON.stringify(d)); } catch (e){} },
     onProgress(f){ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('office.localProgress.')) try { f(k.slice(21), JSON.parse(localStorage.getItem(k))); } catch (e){} } },
-    setParkour(id, d){ try { localStorage.setItem('office.localParkour.' + id, JSON.stringify(d)); } catch (e){} for (const f of pkCbs) f(id, d); },
-    onParkour(f){ pkCbs.push(f); for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('office.localParkour.')) try { f(k.slice(20), JSON.parse(localStorage.getItem(k))); } catch (e){} } },
+    setParkour(id, d){ try { localStorage.setItem('office.localParkour2.' + id, JSON.stringify(d)); } catch (e){} for (const f of pkCbs) f(id, d); },
+    onParkour(f){ pkCbs.push(f); for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('office.localParkour2.')) try { f(k.slice(21), JSON.parse(localStorage.getItem(k))); } catch (e){} } },
     // whiteboards: kept in this browser's localStorage, shared with the other tabs
     addStroke(b, d){ const all = localBoards(), id = 's' + Date.now().toString(36) + rid(); (all[b] = all[b] || {})[id] = d; saveBoards(all); bc.postMessage({type: 'stroke', key: myKey, b, id, d}); const f = boardCbs[b]; if (f) f.add(id, d); },
     clearBoard(b){ const all = localBoards(), ids = Object.keys(all[b] || {}); delete all[b]; saveBoards(all); bc.postMessage({type: 'clear', key: myKey, b, ids}); const f = boardCbs[b]; if (f) for (const id of ids) f.removed(id); },

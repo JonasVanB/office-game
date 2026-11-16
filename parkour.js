@@ -1,24 +1,27 @@
 // Rooftop parkour: a time-trial course around and on top of the building (see parkour.md for the route and the numbers).
 // The east emergency exit (x = 50, 4e verdiep) leads onto a fire-escape balcony with the start line. The route goes over the
 // neighbour's roof, west along the side A facade (gantries + wall runs), up onto our flat roof, over the lift motor room onto
-// the west curved roof, along its ridge and down a zipline to a finish pad next to the race deck.
+// the west curved roof and along its ridge, slides down the roof and drops onto a scaffold deck on side B, runs east along the
+// side B scaffolding, climbs back onto the flat roof, crosses to the east curved roof, runs its ridge and takes a zipline back
+// over the start to a finish pad on the neighbour's roof.
 //
 // While you are outside this module owns the controls (GAME.controlLock) and runs its own 3D movement: momentum running,
 // jump with coyote time and a jump buffer, vaults, ledge grabs + mantles, wall runs, wall climbs (+ turn and kick off), slides,
 // rolls and the zipline. Everything on the route you can touch is yellow.
 //
 // Keys: WASD move · Space jump (hold for higher) · C slide / crouch / roll on landing · Shift walk · R back to the last checkpoint ·
-// hold R restart at the start · E (on the balcony) back inside. Touch: left half = move stick, Jump and Slide buttons.
+// hold R or Backspace: restart at the start · E (on the balcony) back inside. Touch: left half = move stick, Jump, Slide and ↺ buttons.
 //
-// Leaderboard: G.mp.parkour (mp.js) stores your best time per account in parkour/<id> (Firebase) or localStorage (local test).
-// Your best run is kept as a ghost in this browser (localStorage 'office.parkour').
+// Leaderboard: G.mp.parkour (mp.js) stores your best time per account in parkour2/<id> (Firebase) or localStorage (local test).
+// Your best run is kept as a ghost in this browser (localStorage 'office.parkour2'). (v1 of the course, shorter, used parkour/.)
 import {sound, play, loop} from './sound.js';
 
 let G, THREE;
 const SOL = [];                                    // solids: {x0, x1, y0, y1, z0, z1, hf?(z) top height, rail?, metal?}
 const R = 0.3, H_STAND = 1.8, H_LOW = 0.9, EYE_STAND = 1.62, EYE_LOW = 0.78, HAND = 1.95;
-const RUN0 = 5.6, RUN_MAX = 7.8, WALK = 2.4, CROUCH = 2.2, JUMP_V = 5.7, G_UP = 16, G_CUT = 34, G_DOWN = 23, AIR = 6;
+const RUN0 = 7.0, RUN_MAX = 9.4, WALK = 2.4, CROUCH = 2.2, JUMP_V = 5.7, G_UP = 16, G_CUT = 34, G_DOWN = 23, AIR = 6;
 const COYOTE = 0.12, BUFFER = 0.15, KILL_Y = -4.5;
+const FAST = 45000, FLOW = 30000;                  // achievement times (progress.js says the same)
 const DOOR_Z = 6.5;
 const START = {x: 51.0, y: 0, z: 6.5, yaw: -Math.PI/2}, LINE_X = 52.0;
 // checkpoints in order: a box you have to pass through, and where you come back after a fall
@@ -26,15 +29,18 @@ const CPS = [
   {name: 'Facade', x0: 37.5, x1: 42.0, z0: -1.4, z1: -0.2, y0: -1.2, y1: 1.5, at: {x: 41.6, y: -0.4, z: -0.64, yaw: Math.PI/2}, post: [40.9, -0.4, -1.05]},
   {name: 'Roof', x0: 19.0, x1: 22.3, z0: -0.4, z1: 13.4, y0: 2.9, y1: 4.6, at: {x: 21.6, y: 3.2, z: 5.6, yaw: Math.PI/2}, post: [21.0, 3.2, 3.2]},
   {name: 'Ridge', x0: 8.5, x1: 14.0, z0: 4.8, z1: 8.2, y0: 5.8, y1: 8.0, at: {x: 13.0, y: 6.38, z: 6.5, yaw: Math.PI/2}, post: [12.4, 6.38, 7.25]},
+  {name: 'Drop', x0: 1.0, x1: 10.0, z0: 13.3, z1: 19.5, y0: -0.6, y1: 2.0, at: {x: 7.9, y: 0.3, z: 14.2, yaw: -Math.PI/2}, post: [9.7, 0.3, 19.2]},
+  {name: 'Scaffold', x0: 20.6, x1: 23.4, z0: 13.2, z1: 15.0, y0: -0.6, y1: 2.0, at: {x: 21.0, y: 0.3, z: 13.85, yaw: -Math.PI/2}, post: [21.6, 0.3, 14.56]},
+  {name: 'East ridge', x0: 36.5, x1: 40.0, z0: 4.8, z1: 8.2, y0: 5.8, y1: 8.5, at: {x: 37.2, y: 6.38, z: 6.5, yaw: -Math.PI/2}, post: [38.4, 6.38, 7.25]},
 ];
-const FINISH = {x0: -8.2, x1: -5.25, z0: 8.7, z1: 14.4};
-const ZIP = {a: [0.2, 8.3, 6.6], b: [-6.6, 3.45, 11.7]};
+const FINISH = {x0: 57.2, x1: 61.5, z0: 8.8, z1: 10.6};             // on the neighbour's roof (y −0.8), at the end of the zipline
+const ZIP = {a: [49.8, 8.3, 6.6], b: [59.3, 2.35, 9.7]}, ZIP_BRAKE = 3.6;   // the last 3.6 m of cable brake you down to ~3 m/s
 const LB = new Map();                              // leaderboard: account id → {t, n, s}
 
 let pk = null;                                     // you, while you are outside (null = inside / not playing)
 let saved = {best: null, splits: null, ghost: null};
-try { saved = Object.assign(saved, JSON.parse(localStorage.getItem('office.parkour') || '{}')); } catch (e) {}
-const store = () => { try { localStorage.setItem('office.parkour', JSON.stringify(saved)); } catch (e) {} };
+try { saved = Object.assign(saved, JSON.parse(localStorage.getItem('office.parkour2') || '{}')); localStorage.removeItem('office.parkour'); } catch (e) {}   // v1 (shorter course) times and ghost are gone
+const store = () => { try { localStorage.setItem('office.parkour2', JSON.stringify(saved)); } catch (e) {} };
 const inp = {f: 0, s: 0, jumpHeld: false, crouch: false, walk: false};
 const touch = {id: null, x0: 0, y0: 0, x: 0, y: 0, jump: false, crouch: false};
 let rDown = 0, hintEl, cv, g2, card, toast, pads, stick, boards = [], cpLamps = [], ghostMesh, cableMesh, failed = {};
@@ -63,7 +69,7 @@ function decal(x, y, z, w, l, dx, dz, m){ const p = new THREE.Mesh(new THREE.Pla
 // a vertical sign with a canvas texture, facing along (nx, nz)
 function sign(x, y, z, w, h, nx, nz, map){ const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({map, toneMapped: false})); p.rotation.y = Math.atan2(nx, nz); p.position.set(x, y, z); G.scene.add(p); return p; }
 
-let YEL, CHEV;
+let YEL, CHEV, climbTex, wallPanelB;
 function buildCourse(){
   YEL = mat(0xffc400, {emissive: 0x7a5200, roughness: 0.5});
   CHEV = new THREE.MeshBasicMaterial({transparent: true, depthWrite: false, toneMapped: false, map: tex(128, 128, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#ffcc1a';
@@ -77,9 +83,9 @@ function buildCourse(){
 
   // ---------- our building as one solid block, the flat roof and the two curved roofs ----------
   solid(-0.25, 50.25, -13, 3.1, -0.25, 13.25);
-  blk(14, 35, 2.64, 3.2, -0.32, 13.32, roofMat);                                  // flat roof over x 14–35 (gravel on top)
+  box(14, 35, 2.64, 3.2, -0.32, 13.32, roofMat); solid(14, 35, 2.64, 3.2, -0.32, 13.25);   // flat roof over x 14–35 (gravel on top); solid flush with the side B facade (wall runs there pass under the overhang)
   for (const [xa, xb] of [[14, 29.2], [30.8, 35]]) box(xa, xb, 3.2, 3.32, -0.34, -0.22, concrete);   // low upstand along side A (open at the climb)
-  box(14, 35, 3.2, 3.32, 13.22, 13.34, concrete);
+  for (const [xa, xb] of [[14, 23.5], [25.1, 35]]) box(xa, xb, 3.2, 3.32, 13.22, 13.34, concrete);   // low upstand along side B (open at the side B climb)
   for (const x of [21, 28]) for (const [z0, z1] of [[0, 0.4], [12.6, 13]]) solid(x - 0.35, x + 0.35, 3.2, 3.65, z0, z1);   // the concrete pillars stick out of the roof a little (index.html draws them)
   const roofSkin = mat(0x8a9097, {metalness: 0.45, roughness: 0.5}), rib = mat(0x6f757c, {metalness: 0.5, roughness: 0.45});
   function curvedRoof(xa, xb){
@@ -125,8 +131,8 @@ function buildCourse(){
   box(56, 56.25, -0.79, -0.78, -4.2, -0.6, YEL);                                       // take-off to the gantry
   decal(58.4, -0.8, 6.5, 1.1, 1.1, 1, 0, CHEV); decal(63.3, -0.8, 5.6, 1.1, 1.1, 0, -1, CHEV); decal(63.3, -0.8, -2.8, 1.1, 1.1, -1, 0, CHEV); decal(57.6, -0.8, -2.6, 1.1, 1.1, -1, 0, CHEV);
   G.scene.updateMatrixWorld(); for (const o of G.scene.children) if (o.isMesh && o.geometry && o.geometry.type !== 'BoxGeometry' && o.position.y < -2 && o.position.y > -12.9 && o.position.x > 52 && o.position.x < 74 && o.position.z > -20 && o.position.z < -3) o.visible = false;   // street trees that would grow through it
-  box(62, 64, -0.8, 0.4, 8.6, 10.4, mat(0x9b968c)); solid(62, 64, -0.8, 0.4, 8.6, 10.4);   // a water tank base (scenery)
-  rod([63, 0.4, 9.5], [63, 2.2, 9.5], 0.9, mat(0x7c8288, {metalness: 0.4}));
+  box(62, 64, -0.8, 0.4, -8.4, -6.6, mat(0x9b968c)); solid(62, 64, -0.8, 0.4, -8.4, -6.6);   // a water tank base (scenery)
+  rod([63, 0.4, -7.5], [63, 2.2, -7.5], 0.9, mat(0x7c8288, {metalness: 0.4}));
 
   // ---------- 3: the side A facade: a landing platform, three window-cleaning gantries, two wall-run panels ----------
   const gantry = (x0, x1, z0 = -1.0) => { blk(x0, x1, -0.55, -0.4, z0, -0.25, grateM(Math.round((x1 - x0)/1.2)), {metal: true});
@@ -137,16 +143,19 @@ function buildCourse(){
   gantry(37.5, 42); box(41.82, 42, -0.4, -0.39, -1.0, -0.25, YEL); box(37.5, 37.68, -0.4, -0.39, -1.0, -0.25, YEL);
   blk(38.9, 39.4, -0.4, 0.3, -0.9, -0.42, mat(0x37474f)); box(38.88, 39.42, 0.22, 0.31, -0.92, -0.4, YEL);   // a cleaning cart: vault it
   gantry(28, 33); box(32.82, 33, -0.4, -0.39, -1.0, -0.25, YEL);
-  const wallPanel = (x0, x1) => { const t = tex(256, 128, (g, w, h) => { g.fillStyle = '#ffc400'; g.fillRect(0, 0, w, h); g.fillStyle = '#1b1c1f';
+  const panelTex = () => tex(256, 128, (g, w, h) => { g.fillStyle = '#ffc400'; g.fillRect(0, 0, w, h); g.fillStyle = '#1b1c1f';
       for (const y of [0, h - 14]) for (let i = -14; i < w + 14; i += 22){ g.beginPath(); g.moveTo(i, y); g.lineTo(i + 11, y); g.lineTo(i + 25, y + 14); g.lineTo(i + 14, y + 14); g.closePath(); g.fill(); }
       g.globalAlpha = 0.85; for (const x of [70, 128, 186]){ g.beginPath(); g.moveTo(x + 22, 64); g.lineTo(x - 8, 40); g.lineTo(x - 8, 52); g.lineTo(x + 6, 64); g.lineTo(x - 8, 76); g.lineTo(x - 8, 88); g.closePath(); g.fill(); } });
-    t.repeat.set(1, 1); box(x0, x1, -0.4, 2.95, -0.29, -0.25, new THREE.MeshStandardMaterial({map: t, roughness: 0.6, emissive: 0x3a2800}));   // visual only: you run on the facade behind it
+  const wallPanel = (x0, x1) => { box(x0, x1, -0.4, 2.95, -0.29, -0.25, new THREE.MeshStandardMaterial({map: panelTex(), roughness: 0.6, emissive: 0x3a2800}));   // visual only: you run on the facade behind it
     for (const x of [x0, x1]) box(x - 0.05, x + 0.05, -0.45, 3.0, -0.35, -0.25, steel); };
+  wallPanelB = (x0, x1) => { box(x0, x1, 0.3, 2.95, 13.25, 13.29, new THREE.MeshStandardMaterial({map: panelTex(), roughness: 0.6, emissive: 0x3a2800}));   // side B: arrows point east
+    for (const x of [x0, x1]) box(x - 0.05, x + 0.05, 0.25, 3.0, 13.25, 13.35, steel); };
   wallPanel(41.3, 46.6); wallPanel(32.6, 38.1);
   // ---------- 4: the climb: a yellow strip up the facade to the yellow roof edge ----------
-  sign(30, 1.34, -0.27, 1.4, 3.48, 0, -1, tex(128, 320, (g, w, h) => { g.fillStyle = '#ffc400'; g.fillRect(0, 0, w, h); g.fillStyle = '#1b1c1f';
+  climbTex = tex(128, 320, (g, w, h) => { g.fillStyle = '#ffc400'; g.fillRect(0, 0, w, h); g.fillStyle = '#1b1c1f';
     for (const x of [0, w - 14]) for (let y = -14; y < h + 14; y += 22){ g.beginPath(); g.moveTo(x, y); g.lineTo(x + 14, y - 14); g.lineTo(x + 14, y - 3); g.lineTo(x, y + 11); g.closePath(); g.fill(); }
-    for (let y = 40; y < h - 20; y += 70){ g.beginPath(); g.moveTo(w/2, y); g.lineTo(w/2 + 34, y + 34); g.lineTo(w/2 + 20, y + 34); g.lineTo(w/2, y + 14); g.lineTo(w/2 - 20, y + 34); g.lineTo(w/2 - 34, y + 34); g.closePath(); g.fill(); } })); box(29.3, 30.7, 2.98, 3.2, -0.37, -0.32, YEL); box(29.3, 30.7, 3.2, 3.215, -0.32, 0.25, YEL);
+    for (let y = 40; y < h - 20; y += 70){ g.beginPath(); g.moveTo(w/2, y); g.lineTo(w/2 + 34, y + 34); g.lineTo(w/2 + 20, y + 34); g.lineTo(w/2, y + 14); g.lineTo(w/2 - 20, y + 34); g.lineTo(w/2 - 34, y + 34); g.closePath(); g.fill(); } });
+  sign(30, 1.34, -0.27, 1.4, 3.48, 0, -1, climbTex); box(29.3, 30.7, 2.98, 3.2, -0.37, -0.32, YEL); box(29.3, 30.7, 3.2, 3.215, -0.32, 0.25, YEL);
   decal(31.6, -0.4, -0.62, 0.7, 0.7, -1, 0, CHEV);
 
   // ---------- 5: rooftop flow on the flat roof ----------
@@ -156,7 +165,7 @@ function buildCourse(){
   for (const z of [-0.3, 13.1]) blk(22.4, 22.9, 3.2, 4.15, z, z + 0.2, steel);
   decal(28.4, 3.2, 1.3, 0.9, 0.9, -1, 0, CHEV); decal(24.2, 3.2, 3.2, 0.9, 0.9, -1, 0.6, CHEV);
   // scenery on the roof (solid, off the route)
-  for (const [x0, x1, z0, z1, h] of [[31, 34, 8.5, 11.8, 1.3], [15.2, 17.4, 10.2, 12.4, 0.5], [18.2, 20.4, 10.2, 12.4, 0.5], [26, 28.4, 9.5, 12.5, 0.9]]){
+  for (const [x0, x1, z0, z1, h] of [[31, 34, 8.5, 11.8, 1.3], [15.2, 17.4, 10.2, 12.4, 0.5], [18.2, 20.4, 10.2, 12.4, 0.5]]){
     blk(x0, x1, 3.2, 3.2 + h, z0, z1, h < 0.6 ? mat(0x9fb6c4, {metalness: 0.2, roughness: 0.2}) : mat(0xaeb3b9, {metalness: 0.3, roughness: 0.6})); }
   // ---------- 6: the chimney: the lift motor room, then up onto the west curved roof ----------
   blk(16.2, 19, 3.2, 5.0, 4, 9, mat(0xc9c5bb)); box(16.18, 19.02, 4.95, 5.05, 3.98, 9.02, concrete);
@@ -166,33 +175,72 @@ function buildCourse(){
   rod([17.4, 5.05, 8.4], [17.4, 7.2, 8.4], 0.035, steel); solid(17.3, 17.5, 5.0, 7.2, 8.3, 8.5);   // antenna
   box(13.9, 14.06, 6.0, 6.32, 5.0, 8.0, YEL);                                           // the gable top: grab here
   decal(20.2, 3.2, 6.5, 0.9, 0.9, -1, 0, CHEV);
-  // ---------- 7: the ridge run ----------
-  blk(-0.25, 13.8, 6.22, 6.38, 5.9, 7.1, grateM(12), {metal: true});
-  for (let x = 0.5; x < 13.8; x += 2.2) for (const z of [5.95, 7.05]) box(x - 0.04, x + 0.04, 6.0, 6.22, z - 0.04, z + 0.04, steel);
+  // ---------- 7: the ridge run (west) ----------
+  const ridge = (x0, x1) => { blk(x0, x1, 6.22, 6.38, 5.9, 7.1, grateM(Math.round(x1 - x0)), {metal: true});
+    for (let x = x0 + 0.7; x < x1; x += 2.2) for (const z of [5.95, 7.05]) box(x - 0.04, x + 0.04, 6.0, 6.22, z - 0.04, z + 0.04, steel); };
+  ridge(-0.25, 13.8);
   blk(6.6, 7.4, 6.38, 7.18, 5.75, 7.25, mat(0x8d949b, {metalness: 0.4, roughness: 0.5})); box(6.58, 7.42, 7.1, 7.19, 5.73, 7.27, YEL);   // ridge vent: vault
-  decal(10.5, 6.38, 6.5, 0.8, 0.8, -1, 0, CHEV); decal(2.6, 6.38, 6.5, 0.8, 0.8, -1, 0, CHEV);
-  // ---------- 8: the zipline ----------
-  box(0.15, 0.3, 6.2, 8.55, 7.2, 7.35, steel); solid(0.15, 0.3, 6.2, 8.55, 7.2, 7.35, {rail: true});
-  box(0.15, 0.3, 8.42, 8.52, 6.5, 7.35, steel);
-  box(-6.75, -6.5, 0, 3.75, 11.85, 12.1, steel); solid(-6.75, -6.5, 0, 3.75, 11.85, 12.1, {rail: true});
-  box(-6.75, -6.5, 3.6, 3.7, 11.6, 12.1, steel);
+  blk(-0.25, -0.1, 6.38, 7.45, 5.9, 7.1, steel, {rail: true});                         // end stop at the gable
+  decal(10.5, 6.38, 6.5, 0.8, 0.8, -1, 0, CHEV); decal(4.2, 6.38, 6.85, 0.8, 0.8, 0, 1, CHEV);
+  // ---------- 8: the roof slide: off the walkway and down the side B slope (yellow seams), off the eave ----------
+  const lane = (xa, xb, za, zb) => { for (let z = 0.3; z < 13; z += 0.62) if (z > za && z < zb) box(xa, xb, roofF(z) - 0.005, roofF(z) + 0.045, z - 0.035, z + 0.035, YEL); };
+  lane(2.6, 5.8, 7.1, 13.4);
+  box(0.6, 9.6, 3.3, 3.44, 13.24, 13.42, YEL);                                          // the eave: launch here
+  // ---------- 9: the drop: a scaffold deck on side B (roll on landing!) ----------
+  blk(1, 10, 0.15, 0.3, 13.25, 19.5, grateM(8), {metal: true});
+  box(9.82, 10, 0.3, 0.31, 13.25, 15.2, YEL);                                           // take-off to the first side B gantry
+  blk(1, 10, 0.3, 3.0, 19.44, 19.52, null, {rail: true}); blk(0.95, 1.02, 0.3, 3.0, 13.25, 19.5, null, {rail: true});   // safety nets
+  const net = new THREE.MeshBasicMaterial({color: 0x2f343a, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false});
+  box(1, 10, 0.3, 3.0, 19.47, 19.49, net); box(0.97, 0.99, 0.3, 3.0, 13.25, 19.5, net);
+  for (const x of [1, 4, 7, 10]) box(x - 0.04, x + 0.04, 0.3, 3.0, 19.44, 19.52, steel);
+  for (const z of [16.4, 19.5]) box(0.95, 1.03, 0.3, 3.0, z - 0.04, z + 0.04, steel);
+  box(1, 10, 2.96, 3.02, 19.44, 19.52, steel); box(0.95, 1.03, 2.96, 3.02, 13.25, 19.5, steel);
+  for (const x of [1.6, 5.5, 9.4]){ rod([x, 0.15, 19.3], [x, -3.6, 13.3], 0.05, steel); rod([x, 0.15, 16.3], [x, -1.8, 13.3], 0.04, steel); }
+  blk(5.0, 5.8, 0.3, 1.15, 13.25, 19.44, mat(0xa0784a, {roughness: 0.9})); box(4.98, 5.82, 1.08, 1.16, 13.25, 19.44, YEL);   // a stack of scaffold planks: vault
+  for (let y = 0.45; y < 1.1; y += 0.22) box(4.99, 5.81, y, y + 0.025, 13.25, 19.44, mat(0x6e5232));
+  blk(8.3, 8.5, 1.25, 1.42, 13.25, 19.44, YEL);                                          // a scaffold tube across the deck: slide under, then jump
+  for (const z of [16.4, 19.4]) box(8.35, 8.45, 0.3, 1.42, z - 0.05, z + 0.05, steel);
+  decal(3.4, 0.3, 16.0, 1.1, 1.1, 1, -0.4, CHEV); decal(7.1, 0.3, 14.4, 0.9, 0.9, 1, 0, CHEV);
+  // ---------- 10: the side B scaffolding: slide bar, wall run, then climb back up ----------
+  const gantryB = (x0, x1) => { blk(x0, x1, 0.15, 0.3, 13.25, 14.5, grateM(Math.round((x1 - x0)/1.2)), {metal: true});
+    box(x0, x1, 0.08, 0.15, 14.44, 14.5, steel); for (let x = x0 + 0.3; x < x1; x += 1.6) rod([x, 0.15, 14.45], [x, -1.0, 13.26], 0.03, steel); };
+  gantryB(12, 16.2); box(12, 12.18, 0.3, 0.31, 13.25, 14.5, YEL); box(16.02, 16.2, 0.3, 0.31, 13.25, 14.5, YEL);
+  blk(14.3, 14.8, 0.3, 1.0, 13.42, 13.9, mat(0x37474f)); box(14.28, 14.82, 0.92, 1.01, 13.4, 13.92, YEL);   // a cleaning cart: vault it (or wall run into it: up and over)
+  wallPanelB(16.0, 20.8);
+  gantryB(20.6, 25.2); box(20.6, 20.78, 0.3, 0.31, 13.25, 14.5, YEL);
+  sign(24.3, 1.75, 13.27, 1.4, 2.9, 0, 1, climbTex); box(23.6, 25.0, 2.98, 3.2, 13.32, 13.37, YEL); box(23.6, 25.0, 3.2, 3.215, 12.75, 13.32, YEL);
+  decal(22.9, 0.3, 13.9, 0.7, 0.7, 1, 0, CHEV);
+  // ---------- 11: back across the flat roof to the east curved roof ----------
+  blk(26.5, 27.3, 3.2, 4.1, 9.0, 13.2, mat(0xaeb3b9, {metalness: 0.3, roughness: 0.6})); box(26.48, 27.32, 4.02, 4.11, 8.98, 13.22, YEL);   // AC unit: vault
+  for (let z = 9.2; z < 13; z += 0.45) box(26.49, 26.51, 3.4, 3.9, z, z + 0.25, darkMetal);
+  decal(25.6, 3.2, 12.0, 0.8, 0.8, 1, 0, CHEV); decal(33.4, 3.2, 12.5, 0.8, 0.8, 1, 0, CHEV);
+  for (let z = 11.4; z < 13.3; z += 0.19) box(34.95, 35.06, roofF(z + 0.1) - 0.1, roofF(z + 0.1) + 0.03, z, z + 0.2, YEL);   // the gable edge: hop on here
+  lane(35.4, 37.4, 7.1, 11.6);
+  // ---------- 12: the ridge run (east) ----------
+  ridge(35.2, 50.25);
+  blk(41.6, 42.4, 6.38, 7.18, 5.75, 7.25, mat(0x8d949b, {metalness: 0.4, roughness: 0.5})); box(41.58, 42.42, 7.1, 7.19, 5.73, 7.27, YEL);   // ridge vent: vault
+  blk(45.5, 45.7, 7.33, 7.5, 5.5, 7.5, YEL);                                            // a cable tray: slide under
+  for (const z of [5.5, 7.4]) blk(45.5, 45.7, roofF(z) - 0.05, 7.5, z - 0.1, z, steel, {rail: true});
+  decal(36.0, 6.38, 6.5, 0.8, 0.8, 1, 0, CHEV); decal(44.0, 6.38, 6.5, 0.8, 0.8, 1, 0, CHEV); decal(48.6, 6.38, 6.5, 0.8, 0.8, 1, 0, CHEV);
+  // ---------- 13: the zipline back over the start, to the finish on the neighbour's roof ----------
+  box(49.7, 49.85, 6.2, 8.55, 7.2, 7.35, steel); solid(49.7, 49.85, 6.2, 8.55, 7.2, 7.35, {rail: true});
+  box(49.7, 49.85, 8.42, 8.52, 6.5, 7.35, steel);
+  box(59.35, 59.6, -0.8, 2.65, 9.85, 10.1, steel); box(59.2, 59.6, 2.5, 2.6, 9.6, 10.1, steel);
   cableMesh = rod(ZIP.a, ZIP.b, 0.025, YEL);
-  // ---------- 9: the finish pad next to the race deck ----------
-  solid(-50, -5, -13, 0, -10, 32);                                                      // the race deck (race.js draws it)
-  solid(-5.2, -5, 0, 1.0, 7.4, 32, {rail: true}); solid(-5.2, -5, 0, 1.0, -10, 5.6, {rail: true});
-  solid(-5, -0.25, -0.1, 0, 5.6, 7.4, {metal: true}); solid(-5, -0.25, 0, 1.05, 5.52, 5.6, {rail: true}); solid(-5, -0.25, 0, 1.05, 7.4, 7.48, {rail: true});
-  decal((FINISH.x0 + FINISH.x1)/2, 0, (FINISH.z0 + FINISH.z1)/2, FINISH.z1 - FINISH.z0, FINISH.x1 - FINISH.x0, -1, 0, new THREE.MeshBasicMaterial({map: tex(256, 128, (g, w, h) => {
+  box(ZIP.b[0] - ZIP_BRAKE*0.82 - 0.05, ZIP.b[0] - ZIP_BRAKE*0.82 + 0.05, ZIP.b[1] + ZIP_BRAKE*0.51 - 0.06, ZIP.b[1] + ZIP_BRAKE*0.51 + 0.06, ZIP.b[2] - ZIP_BRAKE*0.27 - 0.06, ZIP.b[2] - ZIP_BRAKE*0.27 + 0.06, mat(0xd32f2f));   // the brake starts here
+  // ---------- 14: the finish pad ----------
+  decal((FINISH.x0 + FINISH.x1)/2, -0.8, (FINISH.z0 + FINISH.z1)/2, FINISH.z1 - FINISH.z0, FINISH.x1 - FINISH.x0, 1, 0, new THREE.MeshBasicMaterial({map: tex(256, 128, (g, w, h) => {
     g.fillStyle = '#ffc400'; g.fillRect(0, 0, w, h); g.fillStyle = '#1b1c1f'; for (let i = 0; i < 16; i++) for (let j = 0; j < 2; j++) if ((i + j) % 2) g.fillRect(i*16, j*10, 16, 10);
     g.font = '900 54px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('FINISH', w/2, 76); })}));
-  for (const z of [8.75, 14.35]) box(-8.35, -8.2, 0, 3.1, z - 0.07, z + 0.07, steel);
-  sign(-8.19, 2.8, 11.55, 5.6, 0.62, 1, 0, banner('FINISH'));
+  for (const z of [8.85, 10.55]) box(61.65, 61.8, -0.8, 2.75, z - 0.07, z + 0.07, steel);
+  sign(61.64, 2.45, 9.7, 2.0, 0.5, -1, 0, banner('FINISH'));
   // ---------- checkpoint lamps ----------
   for (const c of CPS){ const [x, y, z] = c.post; box(x - 0.05, x + 0.05, y, y + 1.6, z - 0.05, z + 0.05, steel);
     const l = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshBasicMaterial({color: 0xffc400, toneMapped: false})); l.position.set(x, y + 1.72, z); G.scene.add(l); cpLamps.push(l); }
   // ---------- leaderboards: on the east wall next to the balcony, and at the finish ----------
   const bt = boardTex(); boards.push(bt);
   sign(50.31, 1.45, 10.7, 3.2, 3.2, 1, 0, bt.t); box(50.25, 50.3, -0.2, 3.1, 9.0, 12.4, steel);
-  sign(-6.6, 1.75, 15.29, 3.2, 3.2, 0, -1, bt.t); box(-8.25, -4.95, 0, 3.4, 15.3, 15.42, steel); solid(-8.25, -4.95, 0, 3.4, 15.3, 15.42);   // facing you as you land
+  sign(64.97, 0.85, 9.7, 2.7, 2.7, -1, 0, bt.t); box(64.94, 64.99, -0.55, 2.25, 8.3, 11.1, steel);   // on the plant room, facing the finish pad
   // ---------- the ghost of your best run ----------
   ghostMesh = new THREE.Group(); const gm = new THREE.MeshBasicMaterial({color: 0xfff3b0, transparent: true, opacity: 0.32, depthWrite: false});
   const gb = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 1.2, 10), gm); gb.position.y = 0.9; ghostMesh.add(gb);
@@ -291,7 +339,7 @@ function tryVault(){
   if (inside && d < 1.9){
     const lx = px + dx*(d + R + 0.15), lz = pz + dz*(d + R + 0.15), sup = support(lx, lz, ot + 0.3);
     if (!blocking(lx, lz, Math.max(sup.top, P.y - 6), H_STAND, 0.45) && sup.top > ot - 20){
-      startMantle(lx, lz, sup.top > -1e8 ? sup.top : P.y, 'vault'); P.anim.keep = Math.max(P.anim.keep, 4.5); if (!sp) P.anim.dir = [dx, dz]; P.anim.peak = ot + 0.22; P.anim.toAir = sup.top < P.y - 0.5; return true; }
+      startMantle(lx, lz, sup.top > -1e8 ? sup.top : P.y, 'vault'); P.anim.keep = Math.max(P.anim.keep, RUN0 - 1.0); if (!sp) P.anim.dir = [dx, dz]; P.anim.peak = ot + 0.22; P.anim.toAir = sup.top < P.y - 0.5; return true; }
   }
   const tx = px + dx*0.35, tz = pz + dz*0.35, sup = support(tx, tz, ot + 0.05);
   if (sup.top > ot - 0.2 && !blocking(tx, tz, sup.top, H_STAND, 0.05)){ startMantle(tx, tz, sup.top, 'step'); P.anim.dur = 0.2; return true; }
@@ -353,12 +401,12 @@ function step(h){
       P.vx = vx; P.vz = vz;
       if ((P.slideT > 0.55 && !crouchWanted) || hsp() < 2.2 || P.slideT > 2.5){ P.st = blocking(P.x, P.z, P.y, H_STAND, 0.05) ? 'crouch' : 'run'; }
     } else {
-      if (crouchWanted && sp > 3.6 && P.st === 'run'){ P.st = 'slide'; P.slideT = 0; P.h = H_LOW; const k = Math.min(sp + 1.2, 9.5)/sp; P.vx *= k; P.vz *= k; play('pkSlide', 0.8, 0); }
+      if (crouchWanted && sp > 3.6 && P.st === 'run'){ P.st = 'slide'; P.slideT = 0; P.h = H_LOW; const k = Math.min(sp + 1.2, 11.0)/sp; P.vx *= k; P.vz *= k; play('pkSlide', 0.8, 0); }
       else {
         if (crouchWanted && P.st === 'run') P.st = 'crouch';
         if (P.st === 'crouch' && !crouchWanted && !blocking(P.x, P.z, P.y, H_STAND, 0.05)) P.st = 'run';
         P.h = P.st === 'crouch' ? H_LOW : H_STAND;
-        if (inp.f > 0.5 && sp > 4.6 && !inp.walk) P.top = Math.min(RUN_MAX, P.top + 1.35*h); else if (sp < 4.2) P.top = Math.max(RUN0, P.top - 6*h);
+        if (inp.f > 0.5 && sp > RUN0 - 1.0 && !inp.walk) P.top = Math.min(RUN_MAX, P.top + 1.35*h); else if (sp < RUN0 - 1.6) P.top = Math.max(RUN0, P.top - 6*h);
         let target = inp.walk ? WALK : P.st === 'crouch' ? CROUCH : P.top*(inp.f < -0.1 ? 0.62 : 1);
         if (P.stagger > 0) target = Math.min(target, 1.6);
         if (wl > 0.05){ const k = 1 - Math.exp(-(sp < 4 ? 12 : 8.5)*h); P.vx += (wx*target - P.vx)*k; P.vz += (wz*target - P.vz)*k; }
@@ -384,14 +432,14 @@ function slope(){ const P = pk, s = P.groundS; if (!s || !s.hf) return [0, 0]; c
 
 function move(h){
   const P = pk, stepH = P.ground ? 0.45 : 0.12;
-  P.hit = null;
+  P.hit = null; P.hits = [];
   const skip = overlapping(P.x, P.z, P.y, P.h, stepH);
   // move along x, then z; on a hit stop flush against the face
   let nx = P.x + P.vx*h, s = blocking(nx, P.z, P.y, P.h, stepH, skip);
-  if (s){ P.hit = {s, n: faceNormal(s, P.x, P.z)}; const face = P.vx > 0 ? s.x0 - R - 0.002 : s.x1 + R + 0.002; nx = P.vx > 0 ? clamp(face, P.x, nx) : clamp(face, nx, P.x); P.vx = 0; if (blocking(nx, P.z, P.y, P.h, stepH, skip)) nx = P.x; }
+  if (s){ P.hit = {s, n: faceNormal(s, P.x, P.z)}; P.hits.push(s); const face = P.vx > 0 ? s.x0 - R - 0.002 : s.x1 + R + 0.002; nx = P.vx > 0 ? clamp(face, P.x, nx) : clamp(face, nx, P.x); P.vx = 0; if (blocking(nx, P.z, P.y, P.h, stepH, skip)) nx = P.x; }
   P.x = nx;
   let nz = P.z + P.vz*h; s = blocking(P.x, nz, P.y, P.h, stepH, skip);
-  if (s){ P.hit = {s, n: faceNormal(s, P.x, P.z)}; const face = P.vz > 0 ? s.z0 - R - 0.002 : s.z1 + R + 0.002; nz = P.vz > 0 ? clamp(face, P.z, nz) : clamp(face, nz, P.z); P.vz = 0; if (blocking(P.x, nz, P.y, P.h, stepH, skip)) nz = P.z; }
+  if (s){ P.hit = {s, n: faceNormal(s, P.x, P.z)}; P.hits.push(s); const face = P.vz > 0 ? s.z0 - R - 0.002 : s.z1 + R + 0.002; nz = P.vz > 0 ? clamp(face, P.z, nz) : clamp(face, nz, P.z); P.vz = 0; if (blocking(P.x, nz, P.y, P.h, stepH, skip)) nz = P.z; }
   P.z = nz;
   // vertical
   let ny = P.y + P.vy*h;
@@ -409,7 +457,7 @@ function move(h){
 function land(impact){
   const P = pk, rollAsk = performance.now() - P.crouchAt < 450 || inp.crouch || touch.crouch;
   if (P.st === 'slide' || P.st === 'crouch'){} else P.st = 'run';
-  if (impact > 9.5 && rollAsk){ P.roll = 0.55; P.roll3 = 0.55; const sp = hsp(); if (sp < 5 && sp > 0.3){ P.vx *= 5/sp; P.vz *= 5/sp; } play('pkLand', 0.5, 0); P.dipV -= 1.2; flash('Roll!', '#ffd54f'); }
+  if (impact > 9.5 && rollAsk){ P.roll = 0.55; P.roll3 = 0.55; const sp = hsp(); if (sp < RUN0 && sp > 0.3){ P.vx *= RUN0/sp; P.vz *= RUN0/sp; } play('pkLand', 0.5, 0); P.dipV -= 1.2; flash('Roll!', '#ffd54f'); }
   else if (impact > 12.5){ P.stagger = 0.45; P.vx *= 0.25; P.vz *= 0.25; P.top = RUN0; P.dipV -= 4.2; play('pkLand', 1, 0); }
   else { P.dipV -= Math.min(3.2, impact*0.24); play('pkLand', clamp(impact/12, 0.15, 0.8), 0); if (impact > 3) play('pkStep', 0.6, 0, P.groundS && P.groundS.metal); }
 }
@@ -423,7 +471,7 @@ function animStep(h){
     P.y = A.from.y + (A.to.y - A.from.y)*up; P.x = A.from.x + (A.to.x - A.from.x)*fw; P.z = A.from.z + (A.to.z - A.from.z)*fw;
   }
   if (u >= 1){
-    const f = fwd(), keep = A.kind === 'vault' ? A.keep*0.97 : A.kind === 'step' ? A.keep*0.88 : Math.max(inp.f > 0.3 ? 4.2 : 0, A.keep*0.55);
+    const f = fwd(), keep = A.kind === 'vault' ? A.keep*0.97 : A.kind === 'step' ? A.keep*0.88 : Math.max(inp.f > 0.3 ? RUN0 - 2.0 : 0, A.keep*0.55);
     const dl = Math.hypot(A.dir[0], A.dir[1]), dx = A.kind === 'vault' && dl > 0.1 ? A.dir[0]/dl : f[0], dz = A.kind === 'vault' && dl > 0.1 ? A.dir[1]/dl : f[1];
     P.vx = dx*keep; P.vz = dz*keep; P.vy = 0; P.st = 'run'; P.h = H_STAND; P.anim = null;
     if (blocking(P.x, P.z, P.y, H_STAND, 0.05)){ P.st = 'crouch'; P.h = H_LOW; }
@@ -432,7 +480,7 @@ function animStep(h){
   }
 }
 function startWallRun(w){
-  const P = pk; P.st = 'wall'; P.wr = {s: w.s, n: w.n, t: w.t, side: w.side, sp: Math.max(w.along, 6.5), time: 0}; P.vy = clamp(P.vy, 1.6, 3.0); P.climbs = 1; P.top = Math.max(P.top, 6.5);
+  const P = pk; P.st = 'wall'; P.wr = {s: w.s, n: w.n, t: w.t, side: w.side, sp: Math.max(w.along, RUN0 + 0.5), time: 0}; P.vy = clamp(P.vy, 1.6, 3.0); P.climbs = 1; P.top = Math.max(P.top, RUN0 + 0.5);
   play('pkStep', 0.7, 0, false); if (window.__stat) window.__stat('wallRuns');
 }
 function wallStep(h){
@@ -441,11 +489,12 @@ function wallStep(h){
     P.buf = 0; P.st = 'run'; P.ground = false; P.vx = W.t[0]*W.sp*0.92 + W.n[0]*4.6; P.vz = W.t[1]*W.sp*0.92 + W.n[1]*4.6; P.vy = JUMP_V; P.lastWall = W.s; P.wallCool = 0.3; P.wr = null; P.airT = 0;
     play('pkStep', 0.8, 0, false); return move(h);
   }
-  W.sp = Math.max(4.8, W.sp - 0.45*h);
+  W.sp = Math.max(RUN0 - 1.0, W.sp - 0.45*h);
   P.vx = W.t[0]*W.sp - W.n[0]*0.6; P.vz = W.t[1]*W.sp - W.n[1]*0.6;     // pressed lightly against the wall
   P.vy -= 9*h; P.vy = Math.max(P.vy, -6);
   move(h);
-  if (P.hit && P.hit.s !== W.s){ const L = findLedge(true); if (L){ P.wr = null; startMantle(L.tx, L.tz, L.top, 'step'); P.anim.dur = 0.22; P.anim.keep = Math.max(W.sp*0.85, 4.5); return; } }   // something low ahead: up and over
+  if (P.hits.some(s => s !== W.s)){ const L = findLedge(true); if (L){ P.wr = null; startMantle(L.tx, L.tz, L.top, 'step'); P.anim.dur = 0.22; P.anim.keep = Math.max(W.sp*0.85, RUN0 - 1.0); return; }   // something low ahead: up and over
+    P.st = 'run'; P.lastWall = W.s; P.wallCool = 0.15; P.wr = null; P.vx += W.n[0]*0.8; P.vz += W.n[1]*0.8; P.airT = 0.2; return; }   // something in the way: drop off the wall
   const px = P.x - W.n[0]*(R + 0.38), pz = P.z - W.n[1]*(R + 0.38), still = pointIn(px, P.y + 1.0, pz);
   if (P.ground || !still || W.time > 1.3 || inp.f < -0.3 || (still && topAt(still, px, pz) < P.y + 1.2)){
     P.st = P.ground ? 'run' : 'run'; P.lastWall = W.s; P.wallCool = 0.15; P.wr = null; if (!P.ground){ P.vx += W.n[0]*0.8; P.vz += W.n[1]*0.8; P.airT = 0.2; }
@@ -472,16 +521,19 @@ function zipTry(pressed){
   const a = ZIP.a, b = ZIP.b, d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(...d), u = d.map(v => v/L);
   const hx = P.x - a[0], hy = P.y + HAND - a[1], hz = P.z - a[2], s = clamp(hx*u[0] + hy*u[1] + hz*u[2], 0, L);
   const dist = Math.hypot(a[0] + u[0]*s - P.x, a[1] + u[1]*s - P.y - HAND, a[2] + u[2]*s - P.z);
-  if (dist > (pressed ? 1.2 : 0.95) || s > L - 1.5) return false;
+  if (dist > (pressed ? 1.2 : 0.95) || s > L - ZIP_BRAKE - 0.5) return false;
   const v0 = Math.max(4, P.vx*u[0] + P.vz*u[2] + Math.max(0, -P.vy)*0.3);
   P.zip = {s, v: v0, L, u}; P.st = 'zip'; P.ground = false; P.climbs = 1; play('pkGrab', 0.8, 0); return true;
 }
 function zipStep(h){
   const P = pk, Z = P.zip, a = ZIP.a;
-  Z.v = Math.min(14, Z.v + (-Z.u[1]*9.8 - 0.012*Z.v*Z.v)*h); Z.s += Z.v*h;
+  const braking = Z.s > Z.L - ZIP_BRAKE;
+  if (braking){ if (!Z.braked){ Z.braked = 1; play('pkSlide', 0.9, 0); } Z.v = Math.max(3, Z.v - 16*h); }
+  else Z.v = Math.min(14, Z.v + (-Z.u[1]*9.8 - 0.012*Z.v*Z.v)*h);
+  Z.s += Z.v*h;
   P.x = a[0] + Z.u[0]*Z.s; P.y = a[1] + Z.u[1]*Z.s - HAND; P.z = a[2] + Z.u[2]*Z.s;
-  if (P.buf > 0 || Z.s >= Z.L - 1.1){
-    P.buf = 0; P.st = 'run'; P.vx = Z.u[0]*Z.v; P.vz = Z.u[2]*Z.v; P.vy = Math.max(Z.u[1]*Z.v*0.35, -3) + (Z.s < Z.L - 1.1 ? 2.5 : 0.5); P.zip = null; P.zipCool = 0.8; P.airT = 0;
+  if (P.buf > 0 || Z.s >= Z.L - 0.6){
+    const end = Z.s >= Z.L - 0.6; P.buf = 0; P.st = 'run'; P.vx = Z.u[0]*Z.v; P.vz = Z.u[2]*Z.v; P.vy = end ? 0 : Math.max(Z.u[1]*Z.v*0.35, -3) + 2.5; P.zip = null; P.zipCool = 0.8; P.airT = 0;
   }
 }
 
@@ -508,7 +560,7 @@ function runLogic(dt){
     run.splits.push(Math.round(run.t)); run.cp++; lamps(); play('pkCheck', 0.7, 0);
     const pb = saved.splits && saved.splits[run.cp - 1]; flash('Checkpoint ' + run.cp + ' · ' + c.name, '#ffd54f', pb != null ? {d: run.t - pb} : null);
   }
-  if (run.cp === CPS.length && P.ground && P.x > FINISH.x0 && P.x < FINISH.x1 && P.z > FINISH.z0 && P.z < FINISH.z1 && P.y < 0.5) finish();
+  if (run.cp === CPS.length && P.st !== 'zip' && P.x > FINISH.x0 && P.x < FINISH.x1 && P.z > FINISH.z0 && P.z < FINISH.z1 && P.y < -0.2) finish();
 }
 function finish(){
   const P = pk, run = P.run, t = Math.round(run.t), prev = saved.best, pb = prev == null || t < prev;
@@ -520,7 +572,7 @@ function finish(){
   boardDirty = true;
   const rank = myId ? ranking().findIndex(([id]) => id === myId) + 1 : 0;
   P.result = {t, prev, pb, rank, splits: run.splits.slice(), falls: run.falls};
-  const A = window.__ach; if (A){ A('p_first'); if (t < 30000) A('p_fast'); if (t < 20000) A('p_flow'); if (!run.falls) A('p_clean'); if (pb && prev != null) A('p_pb'); if (rank === 1) A('p_top'); }
+  const A = window.__ach; if (A){ A('pk_first'); if (t < FAST) A('pk_fast'); if (t < FLOW) A('pk_flow'); if (!run.falls) A('pk_clean'); if (pb && prev != null) A('pk_pb'); if (rank === 1) A('pk_top'); }
   renderResults();
 }
 function renderResults(){
@@ -531,10 +583,10 @@ function renderResults(){
     + r.splits.map((s, i) => `<span>Checkpoint ${i + 1} · ${CPS[i].name}</span><b style="color:#1d2229">${fmt(s)}</b>`).join('') + `<span>Falls</span><b style="color:#1d2229">${r.falls}</b></div>`
     + (rows.length ? `<div style="margin-top:10px;border-top:1px solid #e3e6ea;padding-top:8px">${rows.map(([id, v], i) => `<div style="display:flex;gap:8px;font-size:13px;${id === myId ? 'font-weight:700' : ''}"><span style="width:16px">${i + 1}</span><span style="flex:1">${esc(v.n || '?')}</span><span>${fmt(v.t)}</span></div>`).join('')}</div>` : '')
     + `<button type="button" data-again style="margin-top:12px;width:100%;font-size:16px;padding:10px;border:0;border-radius:10px;background:#2f5d9e;color:#fff;font-weight:600">Run again${t ? '' : ' (Enter)'}</button>`
-    + `<button type="button" data-leave style="width:100%;margin-top:6px;font-size:14px;padding:8px;border:0;border-radius:10px;background:#e8ebef;color:#1d2229">Walk back${t ? '' : ' (E)'}</button>`;
+    + `<button type="button" data-leave style="width:100%;margin-top:6px;font-size:14px;padding:8px;border:0;border-radius:10px;background:#e8ebef;color:#1d2229">Back inside${t ? '' : ' (E)'}</button>`;
   card.style.display = 'block';
   const on = (sel, fn) => card.querySelectorAll(sel).forEach(b => { const go = e => { e.preventDefault(); e.stopPropagation(); fn(); }; b.addEventListener('click', go); b.addEventListener('touchend', go); });
-  on('[data-again]', restart); on('[data-leave]', () => leave(false));
+  on('[data-again]', restart); on('[data-leave]', () => leave());
 }
 
 // ======================================================= entering and leaving =======================================================
@@ -545,17 +597,16 @@ function enter(){
   G.controlLock = {aim, press(){}};
   G.zoneOverride = 'Rooftop parkour'; lamps();
   if (pads) pads.style.display = 'block';
-  play('thud', 0.5, 0, true); if (window.__ach) window.__ach('p_out');
+  play('thud', 0.5, 0, true); if (window.__ach) window.__ach('pk_out');
   if (!saved.seenHelp){ saved.seenHelp = 1; store(); pk.help = 14; } else pk.help = 5;
 }
-function leave(inside){
+function leave(){
   if (!pk) return; const P = pk; pk = null;
   G.controlLock = null; G.feetY = null; G.zoneOverride = null; card.style.display = 'none'; ghostMesh.visible = false;
   if (pads) pads.style.display = 'none'; touch.id = null; touch.jump = touch.crouch = false;
   G.camera.fov = baseFov; G.camera.updateProjectionMatrix(); G.camera.rotation.z = 0;
   g2.clearRect(0, 0, cv.width, cv.height); loop('wind', 0); loop('zip', 0);
-  if (inside){ G.setView(49.0, DOOR_Z, Math.PI/2, 0); play('thud', 0.5, 0, true); }
-  else G.setView(clamp(P.x, -49, -5.6), clamp(P.z, -9, 31), P.yaw, 0);   // on the race deck: walk on from here
+  G.setView(49.0, DOOR_Z, Math.PI/2, 0); play('thud', 0.5, 0, true);
 }
 function aim(dx, dy, s){ if (!pk) return; const k = s >= 2.4 ? 0.0065 : 0.0022*s; pk.yaw -= dx*k; pk.pitch = clamp(pk.pitch - dy*k, -1.45, 1.45); if (pk.turn){ pk.turn.from -= dx*k; pk.turn.to -= dx*k; } }
 const nearEastDoorInside = () => { const s = G.state; return s.lv === 0 && Math.abs(s.y || 0) < 0.6 && Math.abs(s.z - DOOR_Z) < 0.85 && s.x > 48.3 && s.x < 50.1; };
@@ -563,8 +614,8 @@ const nearEastDoorOutside = () => pk && pk.x < 51.3 && Math.abs(pk.z - DOOR_Z) <
 
 function use(){
   if (pk){
-    if (pk.result){ leave(false); return true; }
-    if (nearEastDoorOutside()){ leave(true); return true; }
+    if (pk.result){ leave(); return true; }
+    if (nearEastDoorOutside()){ leave(); return true; }
     return true;
   }
   if (!G.state.started || G.controlLock) return false;
@@ -599,10 +650,10 @@ function camera(dt){
   // field of view widens with speed
   baseFov = innerWidth < innerHeight ? 80 : 70;
   const speed3 = P.st === 'zip' ? P.zip.v : Math.hypot(sp, P.ground ? 0 : P.vy*0.5);
-  const fovT = baseFov + clamp((speed3 - 4.5)*2.4, 0, 15) + (P.st === 'zip' ? 3 : 0); P.fovK += (fovT - P.fovK)*Math.min(1, dt*5);
+  const fovT = baseFov + clamp((speed3 - 5.5)*2.2, 0, 15) + (P.st === 'zip' ? 3 : 0); P.fovK += (fovT - P.fovK)*Math.min(1, dt*5);
   cam.fov = P.fovK; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
   // wind and the zipline trolley
-  loop('wind', clamp((speed3 - 3.5)/12, 0, 0.42)); loop('zip', P.st === 'zip' ? clamp(P.zip.v/14, 0.15, 0.5) : 0);
+  loop('wind', clamp((speed3 - 5)/12, 0, 0.42)); loop('zip', P.st === 'zip' ? clamp(P.zip.v/14, 0.15, 0.5) : 0);
   P.speed3 = speed3;
 }
 function drawGhost(){
@@ -618,7 +669,7 @@ function hud(dt){
   const small = W < 560, run = P.run;
   // speed lines
   const sp = P.speed3 || 0;
-  if (sp > 7.2){ const a = clamp((sp - 7.2)/5, 0, 0.5); g2.strokeStyle = `rgba(255,255,255,${a})`; g2.lineWidth = 1.5; for (let i = 0; i < 18; i++){ const ang = Math.random()*Math.PI*2, r0 = Math.max(W, H)*(0.42 + Math.random()*0.15), r1 = r0 + 40 + Math.random()*80; g2.beginPath(); g2.moveTo(W/2 + Math.cos(ang)*r0, H/2 + Math.sin(ang)*r0); g2.lineTo(W/2 + Math.cos(ang)*r1, H/2 + Math.sin(ang)*r1); g2.stroke(); } }
+  if (sp > 8.8){ const a = clamp((sp - 8.8)/5, 0, 0.5); g2.strokeStyle = `rgba(255,255,255,${a})`; g2.lineWidth = 1.5; for (let i = 0; i < 18; i++){ const ang = Math.random()*Math.PI*2, r0 = Math.max(W, H)*(0.42 + Math.random()*0.15), r1 = r0 + 40 + Math.random()*80; g2.beginPath(); g2.moveTo(W/2 + Math.cos(ang)*r0, H/2 + Math.sin(ang)*r0); g2.lineTo(W/2 + Math.cos(ang)*r1, H/2 + Math.sin(ang)*r1); g2.stroke(); } }
   // crosshair dot
   g2.fillStyle = 'rgba(255,255,255,.75)'; g2.beginPath(); g2.arc(W/2, H/2, 2.2, 0, 7); g2.fill();
   // timer
@@ -629,6 +680,7 @@ function hud(dt){
   else { g2.font = '800 22px ui-monospace, Consolas, monospace'; g2.fillText(fmt(run.phase === 'done' && P.result ? P.result.t : run.t), bx + 14, by + 17); g2.font = '600 12px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,255,255,.8)'; g2.fillText(`checkpoint ${run.cp}/${CPS.length}${run.falls ? ' · falls ' + run.falls : ''}`, bx + 14, by + 36); }
   g2.textAlign = 'right'; g2.font = '600 12px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,255,255,.8)'; g2.fillText('best ' + fmt(saved.best), bx + bw - 12, by + 15);
   g2.font = '700 13px system-ui, sans-serif'; g2.fillStyle = '#fff'; g2.fillText(Math.round(sp*3.6) + ' km/h', bx + bw - 12, by + 34);
+  if (!isTouch()){ g2.textAlign = 'center'; g2.font = '600 11px system-ui, sans-serif'; g2.fillStyle = 'rgba(255,255,255,.7)'; g2.fillText('R checkpoint · Backspace full reset', W/2, by + 58); }
   // messages
   g2.textAlign = 'center';
   if (P.flash){ const a = (performance.now() - P.flash.at)/1000, dur = 1.8; if (a > dur) P.flash = null; else {
@@ -638,7 +690,7 @@ function hud(dt){
     g2.globalAlpha = 1; } }
   if (rDown && performance.now() - rDown > 200){ const u = Math.min(1, (performance.now() - rDown)/700); g2.fillStyle = 'rgba(20,24,30,.7)'; g2.fillRect(W/2 - 90, H*0.62, 180, 10); g2.fillStyle = '#ffc400'; g2.fillRect(W/2 - 90, H*0.62, 180*u, 10); g2.font = '700 13px system-ui, sans-serif'; g2.fillStyle = '#fff'; g2.fillText('restart', W/2, H*0.62 - 12); }
   if (P.help > 0){ P.help -= dt; g2.globalAlpha = Math.min(1, P.help); g2.font = '600 13px system-ui, sans-serif'; const y = isTouch() ? H - 200 : H - 34;
-    const lines = isTouch() ? ['Left: move · right: look · Jump / Slide buttons', 'Run along a wall in the air: wall run · run at a wall + Jump: climb · yellow = grab / run here'] : ['W A S D run · Space jump (hold = higher) · C slide, or tap C just before a big landing to roll', 'Jump next to a wall: wall run · jump at a wall: climb (Space again: kick off) · yellow = grab / run here · R checkpoint · hold R restart'];
+    const lines = isTouch() ? ['Left: move · right: look · Jump / Slide buttons · ↺ full reset', 'Run along a wall in the air: wall run · run at a wall + Jump: climb · yellow = grab / run here'] : ['W A S D run · Space jump (hold = higher) · C slide, or tap C just before a big landing to roll', 'Jump next to a wall: wall run · jump at a wall: climb (Space again: kick off) · yellow = grab / run here', 'R back to the last checkpoint · Backspace full reset (back to the start)'];
     g2.lineWidth = 4; g2.strokeStyle = 'rgba(20,24,30,.8)'; g2.fillStyle = '#fff'; lines.forEach((l, i) => { g2.strokeText(l, W/2, y - (lines.length - 1 - i)*20); g2.fillText(l, W/2, y - (lines.length - 1 - i)*20); }); g2.globalAlpha = 1; }
   // fade (respawn)
   if (P.fade > 0){ g2.fillStyle = `rgba(10,12,16,${Math.min(1, P.fade*2.2)})`; g2.fillRect(0, 0, W, H); }
@@ -682,6 +734,7 @@ function onKey(e){
   if (e.code === 'Space'){ eat(); if (down && !e.repeat) pressJump(); else if (!down) inp.jumpHeld = false; return; }
   if (e.code === 'KeyC'){ eat(); inp.crouch = down; if (down && !e.repeat) pressCrouch(); return; }
   if (e.code === 'KeyR'){ eat(); if (pk.result) return; if (down && !e.repeat) rDown = performance.now(); else if (!down && rDown){ if (performance.now() - rDown < 600){ pk.dead = 0.3; } rDown = 0; } return; }
+  if (e.code === 'Backspace'){ eat(); if (down && !e.repeat){ rDown = 0; restart(); } return; }   // full reset: back to the start, clock cleared
   if ((e.code === 'Enter' || e.code === 'NumpadEnter') && pk.result){ eat(); if (down && !e.repeat) restart(); }
 }
 
@@ -698,6 +751,7 @@ function buildTouch(){
     const up = e => { e.preventDefault(); b.style.background = 'rgba(20,24,30,.5)'; off(); }; b.addEventListener('touchend', up); b.addEventListener('touchcancel', up); };
   btn('Jump', 24, 120, 92, () => { touch.jump = true; pressJump(); }, () => { touch.jump = false; inp.jumpHeld = false; });
   btn('Slide', 128, 70, 70, () => { touch.crouch = true; pressCrouch(); }, () => { touch.crouch = false; });
+  btn('↺', 24, 230, 48, () => { if (pk && !pk.result) restart(); }, () => {});
 }
 
 function init(){

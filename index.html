@@ -507,6 +507,7 @@ colliders.push([SX0-0.05, SX0+0.05, 0, 3.14, 0], [SX0-0.05, SX0+0.05, 0, 3.14, 2
   box(STW0, STW1, ya, ya+0.05, z0, z1, FRAME); box(STW0, STW1, yb-0.05, yb, z0, z1, FRAME);
   for (let i=0;i<=n;i++){ const p = STW0 + (STW1-STW0)*i/n; box(p-0.035, p+0.035, ya, yb, z0, z1, FRAME); }
   box(STW0, STW1, ya-0.03, ya, -0.05, 0.08, mat(0x8a8f95, {roughness: 0.45, metalness: 0.4}));   // gray window profile as sill
+  colliders.push([STW0, STW1, z0, z1, 0], [STW0, STW1, z0, z1, 2]);   // the glass is a wall too (4e and 3e): no walking out onto the facade
 }
 function stairY(x, z){ if (x <= SXL) return -SH; return z >= SZM ? -SH*(SXT - x)/(SXT - SXL) : -SH - SH*(x - SXL)/(SXT - SXL); }
 colliders.push([SX0, SXT, 0.17, SZM+0.02, 0], [SX0, SXT-0.55, SZM, 2.97, 0]);              // 4e: the hole (flight A is entered from the top landing)
