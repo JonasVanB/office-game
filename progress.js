@@ -147,6 +147,20 @@ export const ACHIEVEMENTS = [
     ['q_streak', '🔥', 'On a streak', 'Complete all daily quests 3 days in a row', 60],
     ['q_10', '📜', 'Questing', 'Complete 10 daily quests', 40, {stat: 'quests', n: 10}],
   ]),
+  ...A('Orbimons', [
+    ['o_first', '🟣', 'Gotta catch one', 'Catch your first Orbimon', 15],
+    ['o_5', '🟣', 'Collector', 'Catch 5 different Orbimons', 30],
+    ['o_10', '🟣', 'Orbimon hunter', 'Catch 10 different Orbimons', 60],
+    ['o_all', '🏆', 'Orbidex complete', 'Catch all 20 Orbimons', 200],
+    ['o_gold', '✨', 'Solid gold', 'Catch a golden Orbimon', 50],
+    ['o_gold5', '✨', 'Gold rush', 'Catch 5 golden Orbimons', 100],
+    ['o_goldall', '👑', 'Midas touch', 'Catch all 20 Orbimons in gold', 500, {secret: true}],
+    ['o_hidden', '🗄️', 'Look inside', 'Find an Orbimon hidden in a fridge or cupboard', 20],
+    ['o_jump', '🦘', 'Reach for the sky', 'Catch an Orbimon you can only reach by jumping', 25],
+    ['o_neon', '💡', 'Night light', 'Catch the Orbimon that only shines at night', 30, {secret: true}],
+    ['o_ghost', '👻', 'Who you gonna call', 'Catch the Orbimon of the haunted night', 40, {secret: true}],
+    ['o_open', '🚪', 'Nosy colleague', 'Open 15 different fridges, cupboards or closets', 20, {stat: 'opened', n: 15}],
+  ]),
   ...A('Night', [
     ['n_boo', '👻', 'Boo!', 'Get scared by a ghost', 20],
     ['n_boo5', '😱', 'Scaredy-cat', 'Get scared by ghosts 5 times', 30, {stat: 'boo', n: 5}],
@@ -204,13 +218,13 @@ export function initProgress({G, net, me}){
     loadedFor = who.id;
     let v = null; try { v = await net.loadProgress(who.id); } catch (e) {}
     if (!v){ try { v = JSON.parse(localStorage.getItem('office.progress.' + who.id)); } catch (e) {} }
-    P = Object.assign({xp: 0, a: {}, s: {}, d: {}, r: {}}, v || {}); P.a = P.a || {}; P.s = P.s || {}; P.d = P.d || {}; P.r = P.r || {};
+    P = Object.assign({xp: 0, a: {}, s: {}, d: {}, r: {}}, v || {}); P.a = P.a || {}; P.s = P.s || {}; P.d = P.d || {}; P.r = P.r || {}; P.o = P.o || {}; P.og = P.og || {};
     refresh(); ach('welcome');
   }
   function save(){
     const who = me(); if (!who || loadedFor !== who.id) return;
     clearTimeout(saveT); saveT = setTimeout(() => {
-      const d = {xp: P.xp, a: P.a, s: P.s, d: P.d, r: P.r || {}, tk: P.tk || null, q: P.q || null, n: who.name, t: Date.now()};
+      const d = {xp: P.xp, a: P.a, s: P.s, d: P.d, r: P.r || {}, tk: P.tk || null, q: P.q || null, o: P.o || null, og: P.og || null, n: who.name, t: Date.now()};   // o, og: Orbimons caught (normal, golden)
       try { localStorage.setItem('office.progress.' + who.id, JSON.stringify(d)); } catch (e) {}
       net.saveProgress(who.id, d);
     }, 1200);
@@ -308,7 +322,7 @@ export function initProgress({G, net, me}){
     if (e.code === 'KeyQ' && !e.repeat && me()){ togglePanel(); e.preventDefault(); return; }
     if (!panelOpen) return;
     if (e.code === 'Escape'){ togglePanel(false); return; }
-    const k = {Digit1: 'home', Digit2: 'ach', Digit3: 'board'}[e.code]; if (k){ tab = k; renderPanel(); e.preventDefault(); e.stopPropagation(); }
+    const k = {Digit1: 'home', Digit2: 'ach', Digit3: 'board', Digit4: 'mons'}[e.code]; if (k){ tab = k; renderPanel(); e.preventDefault(); e.stopPropagation(); }
   }, true);
   addEventListener('wheel', e => { if (panelOpen) panel.scrollTop += e.deltaY; }, {passive: true});
   panel.addEventListener('click', e => {
@@ -324,13 +338,14 @@ export function initProgress({G, net, me}){
     b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (me()) window.__openProgress('ach'); }); c2.appendChild(b); } }
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  window.__progRefresh = () => { if (panelOpen) renderPanel(); };   // orbimons.js: silhouettes are ready
   function renderPanel(){
     const l = levelOf(P.xp), next = LEVELS.find(x => x.xp > P.xp), pct = next ? (P.xp - l.xp)/(next.xp - l.xp)*100 : 100;
     const got = Object.keys(P.a).filter(id => BY_ID[id]).length;
     const tabBtn = (id, label) => `<button data-tab="${id}" style="border:0;border-radius:9px;padding:7px 12px;font-size:14px;font-weight:600;cursor:pointer;background:${tab === id ? '#2f5d9e' : '#eef1f5'};color:${tab === id ? '#fff' : '#1d2229'}">${label}</button>`;
     let h = `<div class="hd"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h1>⭐ Level ${l.lv} · ${l.name}</h1><button data-act="close" style="border:0;background:#eef1f5;border-radius:9px;padding:6px 11px;font-size:15px;cursor:pointer">✕</button></div>`
       + `<div class="note">${P.xp} XP${next ? ` · ${next.xp - P.xp} XP to level ${next.lv} (${next.name})` : ' · max level'} · 🏆 ${got}/${ACHIEVEMENTS.length}</div><div class="big"><i style="width:${pct}%"></i></div>`
-      + `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">${tabBtn('home', '1 · Overview')}${tabBtn('ach', '2 · Achievements')}${tabBtn('board', '3 · Leaderboard')}</div></div><div class="bd">`;
+      + `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">${tabBtn('home', '1 · Overview')}${tabBtn('ach', '2 · Achievements')}${tabBtn('board', '3 · Leaderboard')}${tabBtn('mons', '4 · Orbimons')}</div></div><div class="bd">`;
     if (tab === 'home'){
       for (const s of sections) h += s();
       h += `<h2>🔒 Access</h2><div class="note">` + Object.entries(LOCKS).map(([d, need]) => `${level() >= need ? '✅' : '🔒'} ${esc(d)} (level ${need})`).join(' · ') + `</div>`;
@@ -339,6 +354,8 @@ export function initProgress({G, net, me}){
         ? `<div class="note">Unlocked! <button data-act="sweater" style="border:0;border-radius:8px;padding:5px 10px;margin-left:6px;cursor:pointer;background:#2f5d9e;color:#fff;font-weight:600">${wearing ? 'Take it off' : 'Put it on'} (O)</button></div>`
         : `<div class="note">Locked. Reach level 6 (Lead), or find where it is hidden somewhere in the office…</div>`);
       h += `<h2>⌨️ Keys</h2><div class="note">E: use / open · Space: jump · F: flashlight · Q: this menu · O: Orbid sweater · Enter: chat · M: sound · Esc: pause</div>`;
+    } else if (tab === 'mons'){
+      h += window.__orbidex ? window.__orbidex() : '<div class="note">The Orbidex is loading…</div>';
     } else if (tab === 'ach'){
       const fBtn = (id, label) => `<button data-filter="${id}" style="border:1px solid ${filter === id ? '#2f5d9e' : '#d5dbe3'};border-radius:16px;padding:4px 11px;font-size:13px;cursor:pointer;background:${filter === id ? '#e8eef8' : '#fff'};color:#1d2229">${label}</button>`;
       h += `<div style="display:flex;gap:6px;margin:10px 0 2px;flex-wrap:wrap">${fBtn('all', 'All')}${fBtn('todo', 'To do')}${fBtn('done', 'Unlocked')}</div>`;

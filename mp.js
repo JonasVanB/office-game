@@ -12,6 +12,7 @@ import {initPostits} from './postit.js';
 import {initTiles} from './tiles.js';
 import {initProgress} from './progress.js';
 import {initTickets} from './tickets.js';
+import {initOrbimons} from './orbimons.js';
 import {initQuests} from './quests.js';
 
 const CFG = window.OFFICE_CONFIG || {};
@@ -395,6 +396,7 @@ async function main(){
   initTiles({G, net, me});
   prog = initProgress({G, net, me});
   tickets = initTickets({G, prog, me});
+  initOrbimons({G, prog, me});
   quests = initQuests({G, prog, me});
   window.__onlineCount = () => joined ? remotes.size + 1 : 0;
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
