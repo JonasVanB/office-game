@@ -108,6 +108,10 @@ const FX = {
   whoosh(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.03, 0.05, 0.12, 0.12*v); const n = noise(g, t, 0.25, 'bandpass', 1800, 1.5); n.f.frequency.setValueAtTime(2600, t); n.f.frequency.exponentialRampToValueAtTime(900, t + 0.2); },
   thud(v, pan, wall){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.02, 0.12, 0.5*v); noise(g, t, 0.15, 'lowpass', wall ? 900 : 1600);
     tone(d, t, 0.12, wall ? 140 : 220, 'sine', 0.25*v); },
+  // paintball (paint.js): the marker's air puff, a ball bursting on something, and getting hit
+  pfft(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.002, 0.015, 0.07, 0.4*v); noise(g, t, 0.1, 'bandpass', 2400, 0.8); tone(d, t, 0.06, 160, 'triangle', 0.15*v); },
+  splat(v, pan){ const d = out(pan), t = ctx.currentTime, g = ctx.createGain(); g.connect(d); env(g, t, 0.001, 0.01, 0.09, 0.45*v); const n = noise(g, t, 0.12, 'lowpass', 1400); n.f.frequency.exponentialRampToValueAtTime(300, t + 0.1); },
+  ouch(v, pan){ const d = out(pan), t = ctx.currentTime; const o = tone(d, t, 0.35, 520, 'square', 0.07*v, 0.01); o.frequency.exponentialRampToValueAtTime(180, t + 0.3); FX.splat(v, pan); },
   // bust: a low double buzz
   buzz(v, pan){ const d = out(pan), t = ctx.currentTime; for (const o of [0, 0.22]) tone(d, t + o, 0.18, 110, 'square', 0.08*v, 0.01); },
   // crowd cheer: lots of voices and a noisy swell (180, a checkout)

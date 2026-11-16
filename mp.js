@@ -186,7 +186,9 @@ function onPresence(type, key, v){
   }
   r.tx = v.x; r.ty = v.y || 0; r.tz = v.z; r.tr = v.r || 0; r.l = v.l || 0; r.name = name; r.color = av.shirt; r.seen = performance.now();
   r.av = av; r.kb = v.kb || null; r.kh = v.kh ? 1 : 0; r.ks = v.ks || 0; r.kg = v.kg || null;   // kiss.js: beanbag seat, holding, start time, game state
-  r.mr = v.mr || null; r.mj = v.mj || 0; r.ma = v.ma || null; r.mg = v.mg || null; r.mk = v.mk || null; r.vl = v.vl || 0;   // mole.js: room role, join time, action, game state (host), private notes (host), villain pose
+  r.mr = v.mr || null; r.mj = v.mj || 0; r.ma = v.ma || null; r.mg = v.mg || null; r.mk = v.mk || null; r.vl = v.vl || 0;
+  r.pr = v.pr || null; r.pj = v.pj || 0; r.pf = v.pf || null; r.ph = v.ph || null; r.pg = v.pg || null; r.pc = v.pc ? 1 : 0;   // paint.js: arena role, join time, shots, hits, game state (host), crouching
+  // mole.js: room role, join time, action, game state (host), private notes (host), villain pose
   r.key = key; r.si = +v.si || 0; r.pe = v.pe || null; r.bx = v.bx || null; r.dd = v.dd || null; r.em = v.em || null; r.rc = v.rc || null;   // sitting (seat height), the toilet game (toilet.js), boxing (boxing.js), dancing (dance.js)
   // a new chat message (c = text, ct = when): bubble above their head and a line in the chat log
   if (v.c && v.ct && v.ct !== r.ct){ r.ct = v.ct; if (net.now() - v.ct < 15000) showChat(r, name, String(v.c).slice(0, MAXCHAT)); }
@@ -311,6 +313,7 @@ function tick(dt){
     if (G.poseDancer) G.poseDancer(r.obj, r.dd, net.now());   // dance.js: bouncing on the beat, arms with the arrows
     if (G.poseRacer) G.poseRacer(r.obj, r.rc, net.now());     // race.js: sitting on a racing office chair
     if (G.poseEmote) G.poseEmote(r.obj, r.em, net.now());     // emotes.js: wave, cheer, dance …
+    if (G.posePaint) G.posePaint(r.obj, r);                    // paint.js: vest, goggles and marker; crouching; splatted on the floor
     if (r.bubble && now > r.bubbleUntil){ r.obj.remove(r.bubble); r.bubble.material.map.dispose(); r.bubble.material.dispose(); r.bubble = null; }
   }
   if (postits) postits.update();
@@ -322,7 +325,7 @@ function tick(dt){
   const s = G.state, round = n => Math.round(n*100)/100;
   const cur = {x: round(s.x), y: round(s.y), z: round(s.z), r: round(s.yaw), l: s.lv, si: s.si || 0, pe: s.pe || null, bx: s.bx || null, dd: s.dd || null, em: s.em || null, rc: s.rc || null}, extra = JSON.stringify([cur.si, cur.pe, cur.bx, cur.dd, cur.em, cur.rc]);
   const changed = !sent || Math.abs(cur.x - sent.x) > 0.02 || Math.abs(cur.z - sent.z) > 0.02 || Math.abs(cur.y - sent.y) > 0.02 || Math.abs(cur.r - sent.r) > 0.03 || cur.l !== sent.l || extra !== sent.extra;
-  if ((changed && now - lastSent > (s.bx ? 45 : s.rc && s.rc.ph === 'race' ? 50 : s.dd ? 70 : 110)) || now - lastBeat > 15000){ net.send(cur); sent = Object.assign({extra}, cur); lastSent = lastBeat = now; }   // faster while boxing or dancing
+  if ((changed && now - lastSent > (s.bx ? 45 : s.pb ? 55 : s.rc && s.rc.ph === 'race' ? 50 : s.dd ? 70 : 110)) || now - lastBeat > 15000){ net.send(cur); sent = Object.assign({extra}, cur); lastSent = lastBeat = now; }   // faster while boxing or dancing
 }
 
 function drawMapExtra(ctx, PAD, MS, level){
@@ -381,7 +384,7 @@ async function main(){
   // the Orbid sweater (progress.js unlocks it): toggle it on your saved character; others see it through your presence data
   // kiss.js (Stiekem kussen) works with the other players' presence
   window.__mpRemotes = () => [...remotes.entries()].map(([key, r]) => ({key, name: r.name, av: r.av, kb: r.kb, kh: r.kh, ks: r.ks, kg: r.kg, seen: r.seen,
-    x: r.x, y: r.y, z: r.z, l: r.l || 0, mr: r.mr, mj: r.mj, ma: r.ma, mg: r.mg, mk: r.mk, vl: r.vl}));
+    x: r.x, y: r.y, z: r.z, l: r.l || 0, mr: r.mr, mj: r.mj, ma: r.ma, mg: r.mg, mk: r.mk, vl: r.vl, pr: r.pr, pj: r.pj, pf: r.pf, ph: r.ph, pg: r.pg, pc: r.pc, r: r.r}));
   window.__mpSend = d => { if (joined) net.send(d); };
   window.__myAvatar = () => profile ? profile.avatar : null;
   window.__myKey = () => net.myKey;

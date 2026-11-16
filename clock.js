@@ -346,7 +346,7 @@ function tick(dt){
 }
 // a door near you opens or slams shut by itself
 function spookDoor(st){
-  const lvl = st.lv === 2 ? 2 : (st.y > 1 ? 1 : 0);
+  const lvl = st.lv === 2 || st.lv === 5 ? st.lv : (st.y > 1 ? 1 : 0);
   const ds = (G.doors || []).filter(d => d.level === lvl && Math.hypot(d.ctr[0] - st.x, d.ctr[1] - st.z) > 3 && Math.hypot(d.ctr[0] - st.x, d.ctr[1] - st.z) < 16);
   if (!ds.length){ play('steps', 0.8, Math.random()*2 - 1); return; }
   const d = ds[Math.random()*ds.length | 0], s = spatial(d.ctr[0], d.ctr[1], st.lv, 18);

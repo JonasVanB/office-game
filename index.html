@@ -58,6 +58,9 @@ body.race-pads .tbtn,body.dance-pads .tbtn,body.race-pads #hint,body.dance-pads 
 <option value="46.5,3.0,-90,2">Gravensteen (3e)</option>
 <option value="46.0,8.07,-90,2">Service Desk (3e)</option>
 <option value="42.85,7.0,90,1">Graslei &amp; Korenlei (upstairs)</option>
+<option value="31.5,6.5,90,5">Lift lobby (2e)</option>
+<option value="14,6.5,90,5">Paintball arena (2e)</option>
+<option value="42.5,6.5,-90,5">East wing (2e)</option>
 </select>
 <canvas id="mini"></canvas>
 <div id="hint" class="pill"></div>
@@ -67,7 +70,7 @@ body.race-pads .tbtn,body.dance-pads .tbtn,body.race-pads #hint,body.dance-pads 
 <div id="start"><div id="card">
 <h1>Office · 4e &amp; 3e verdiep</h1>
 <p id="howto"></p>
-<p>You start in the Entrance hall on the 4e verdiep. The stairwell next to the lifts takes you down to the 3e verdiep.</p>
+<p>You start in the Entrance hall on the 4e verdiep. The stairwell next to the lifts takes you down to the 3e verdiep; the lift (E at its door) also goes to the 2e, where the paintball arena is.</p>
 <p id="err">Your browser couldn't start 3D (WebGL). Try another browser or device.</p>
 <div id="mp" style="display:none">
 <p id="mpStatus"></p>
@@ -1241,6 +1244,41 @@ sign('Kitchen', 37.5, LO+2.35, 8.11, BZ, 0.7); sign('Belfort', 41.0, LO+2.35, 8.
 sign('Stairs', 34.43, LO+2.35, 5.39, FZ, 0.7); sign('Lift', 29.85, LO+2.35, 5.38, FZ, 0.5); sign('Lift', 32.12, LO+2.35, 5.38, FZ, 0.5);
 const LOWER_WALLS = mapWalls.splice(MW0), LOWER_RECTS = floorRects.splice(FR0);
 
+// ======================= 2e verdiep (two floors down): a lift lobby in the middle (x 28–35, z 5.32–7.68) and two empty halls =======================
+// West hall (x 0–28, the biggest): the paintball arena (paint.js), closed double door, enter with E. East hall (x 35–50): empty.
+// No stairs go down here: you take the lift (E at a lift door, on any floor). Only the shell: carpet, outer walls, pillars, ceiling with lights.
+const LO2 = 2*LO, MW2 = mapWalls.length, FR2 = floorRects.length;
+BY = LO2; LVL = 5;
+floor(0, 50, 0, 13, carpetTex, 0, '#3d5f96', LO2);
+floor(28, 35, 5.32, 7.68, stoneTex, 2, '#a3a19c', LO2);
+floorRects.push([28, 35, 0, 5.32, '#333'], [28, 35, 7.68, 13, '#333']);   // lift shafts and the closed core
+ceiling(0, 50, 0, 13, LO2+2.6);
+const inCore = (x, z) => x > 27.9 && x < 35.1 && (z < 5.32 || z > 7.68);
+for (let x=1.2; x<50; x+=2.4) for (const z of [1.5, 3.8, 6.5, 9.2, 11.5]){ if (!inCore(x, z)) ceilLight(x, LO2+2.6, z); }
+for (let x=2.4; x<49; x+=2.4) for (const [z, k] of [[1.5, 2], [3.8, 0], [6.5, 1], [9.2, 0], [11.5, 2]]){ if (!inCore(x, z)) ceilFit(k, x, LO2+2.6, z); }
+for (const side of [-1, 1]){ wallBand(side, 0, BL, -LO); mapWalls.push([0, side<0?0:13, BL, side<0?0:13, 2]); }
+for (const [xe, out] of [[0, -1], [BL, 1]]){   // end walls with a closed glass emergency door
+  const xa = out < 0 ? xe-0.25 : xe, xb = out < 0 ? xe : xe+0.25, xm = xe + out*0.12;
+  box(xa, xb, 0, -LO, -0.25, EXIT0, WALL, true); box(xa, xb, 0, -LO, EXIT1, 13.25, WALL, true); box(xa, xb, EXITH, -LO, EXIT0, EXIT1, WALL);
+  box(xm-0.04, xm+0.04, 0, EXITH, EXIT0, EXIT0+0.05, FRAME); box(xm-0.04, xm+0.04, 0, EXITH, EXIT1-0.05, EXIT1, FRAME); box(xm-0.04, xm+0.04, EXITH-0.05, EXITH, EXIT0, EXIT1, FRAME);
+  box(xm-0.01, xm+0.01, 0.12, EXITH-0.05, EXIT0+0.05, EXIT1-0.05, WINGLASS, true);
+  sign('Emergency exit', xe - out*0.02, LO2+2.4, 6.5, out < 0 ? FX : BX, 0.9, '#1e8f4e');
+  mapWalls.push([xe, 0, xe, 13, 2]);
+}
+for (const x of [0, 7, 14, 21, 28, 35, 42, BL]) for (const z of [0, 13]){   // pillars along both long walls, every 7 m
+  const x0 = Math.max(0, x-0.35), x1 = Math.min(BL, x+0.35), za = z === 0 ? 0 : 12.6, zb = z === 0 ? 0.4 : 13;
+  box(x0, x1, 0, 2.6, za, zb, mat(0xdedbd3), true);
+}
+// the lift lobby: lift doors on the z = 5.32 wall, a plain back wall, double doors to both halls
+wallV(28, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(28, 1, true);   // closed: the west hall is the paintball arena, enter with E (paint.js)
+wallV(35, 0, 13, [[5.58, 7.42, 2.3]]); doubleDoor(35, -1);
+wallH(5.32, 28, 35, [[29.23, 30.46, 2.1], [31.5, 32.73, 2.1]]); wallH(7.68, 28, 35);
+for (const [a, b] of [[29.23, 30.46], [31.5, 32.73]]){ box(a, b, 0, 2.1, 5.25, 5.3, METAL, true); box((a+b)/2-0.005, (a+b)/2+0.005, 0, 2.1, 5.24, 5.31, FRAME); box(b+0.08, b+0.16, 1.1, 1.28, 5.36, 5.39, FRAME); }
+BY = 0; LVL = 0;
+sign('2e verdiep', 34.94, LO2+2.45, 6.5, BX, 1.0); sign('East wing (2e)', 35.06, LO2+2.45, 6.5, FX, 1.0);
+sign('Paintball arena', 28.06, LO2+2.45, 6.5, FX, 1.1, '#c0392b'); sign('Lift', 29.85, LO2+2.35, 5.38, FZ, 0.5); sign('Lift', 32.12, LO2+2.35, 5.38, FZ, 0.5);
+const L2_WALLS = mapWalls.splice(MW2), L2_RECTS = floorRects.splice(FR2);
+
 // ---------- merge everything built so far (it never moves) into one mesh per material per 10 m stretch and floor ----------
 // Thousands of small meshes become a few hundred, so all the detail above costs very few draw calls. Doors and avatars are added later and stay separate.
 // copy one mesh's vertices into the merged buffers at offset k, in world space (minus the bucket centre); returns the new offset
@@ -1261,7 +1299,7 @@ function mergeStatic(){
     for (let p = o.parent; p; p = p.parent) if (p.userData.noMerge) return;   // things that move (the Gravensteen table, the boxing ring)
     const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
     v.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld);
-    const key = o.material.uuid + '|' + Math.floor(v.x/10) + '|' + (v.y < -0.4 ? 0 : 1) + '|' + o.renderOrder;
+    const key = o.material.uuid + '|' + Math.floor(v.x/10) + '|' + (v.y < -3.4 ? -1 : v.y < -0.4 ? 0 : 1) + '|' + o.renderOrder;
     let b = buckets.get(key); if (!b){ b = {m: o.material, ro: o.renderOrder, parts: [], n: 0, c: new THREE.Vector3()}; buckets.set(key, b); }
     b.parts.push(o); b.n += g.index ? g.index.count : g.attributes.position.count; b.c.add(v); drop.push(o);
   });
@@ -1293,7 +1331,7 @@ const DOOR_GRAY = mat(0x3b3f45, {roughness: 0.45, metalness: 0.35}), DOOR_WHITE 
 const DOOR_BLUE = mat(0x2f5fa8, {roughness: 0.5}), DOOR_GREEN = mat(0x4e8c68, {roughness: 0.5});   // stairway doors blue, toilet + utility doors green; 'glass' = glass leaf in a gray frame
 const doors = [];
 function addDoor(axis, c, a0, a1, h, level, swing, hinge, name, mo){
-  const base = level === 2 ? LO : level === 1 ? MZ : 0, glass = mo === 'glass', m = glass ? GLASS : (mo || (level === 2 ? DOOR_WHITE : DOOR_GRAY));
+  const base = level === 5 ? LO2 : level === 2 ? LO : level === 1 ? MZ : 0, glass = mo === 'glass', m = glass ? GLASS : (mo || (level === 2 ? DOOR_WHITE : DOOR_GRAY));
   const sg = hinge === 'a' ? 1 : -1, L = (a1 - a0) - 0.06, hp = (hinge === 'a' ? a0 + 0.03 : a1 - 0.03), lh = h - 0.03;
   const g = new THREE.Group();
   if (axis === 'x') g.position.set(hp, base, c); else g.position.set(c, base, hp);
@@ -1347,7 +1385,7 @@ addDoor('x', 8.18, 36.02, 36.98, DOORH, 2, 1, 'b', 'Kitchen');   // hinged on th
 addDoor('x', 8.18, 39.52, 40.48, DOORH, 2, 1, 'a', 'Belfort');
 addDoor('x', 8.18, 42.05, 43.01, DOORH, 2, 1, 'a', 'Service Desk');
 function doorAngle(d, a){ d.g.rotation.y = d.axis === 'x' ? -d.sg*d.swing*a : d.sg*d.swing*a; }
-function doorLevel(){ return mode === 2 ? 2 : mode === 1 ? 1 : mode === 0 ? 0 : -1; }
+function doorLevel(){ return mode === 5 ? 5 : mode === 2 ? 2 : mode === 1 ? 1 : mode === 0 ? 0 : -1; }
 
 const ENVMATS = [];   // materials with reflections; clock.js fades them with the room light
 // reflections on metal, glass and glossy surfaces: a small blurred environment of a bright office, rendered once at start-up.
@@ -1371,7 +1409,7 @@ function buildMap(){
   for (const c of [mini, staticMap]){ c.width = w*dpr; c.height = h*dpr; }
   mini.style.width = w + 'px'; mini.style.height = h + 'px';
   const g = staticMap.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-  const RECTS = mapLevel === 2 ? LOWER_RECTS : floorRects, WALLS = mapLevel === 2 ? LOWER_WALLS : mapWalls;
+  const RECTS = mapLevel === 2 ? LOWER_RECTS : mapLevel === 5 ? L2_RECTS : floorRects, WALLS = mapLevel === 2 ? LOWER_WALLS : mapLevel === 5 ? L2_WALLS : mapWalls;
   for (const r of RECTS){ g.fillStyle = r[4]; g.fillRect(PAD + r[0]*MS, PAD + r[2]*MS, (r[1]-r[0])*MS, (r[3]-r[2])*MS); }
   for (const s of WALLS){ g.strokeStyle = s[4] === 1 ? '#bfe3ff' : s[4] === 3 ? '#ffd27a' : '#fff'; g.setLineDash(s[4] === 3 ? [3, 2] : []); g.lineWidth = s[4] === 2 ? 1.6 : 1; g.beginPath(); g.moveTo(PAD + s[0]*MS, PAD + s[1]*MS); g.lineTo(PAD + s[2]*MS, PAD + s[3]*MS); g.stroke(); }
   mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1426,6 +1464,7 @@ doorHint.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagati
 GAME.fixtures = FIXTURES; GAME.boards = BOARDS; GAME.chairs = CHAIRS; GAME.ring = GRAV;
 GAME.setView = (x, z, y, p) => { px = x; pz = z; yaw = y; pitch = p; hopY = hopV = 0; };
 GAME.getView = () => ({x: px, z: pz, yaw, pitch, mode});
+GAME.setMode = m => { mode = m; seat = null; crouch = false; };   // lift.js: arrive on another floor
 // ---------- sitting: E next to a chair or stool sits you down (you can still look around); E again or walking gets you up ----------
 let seat = null;
 function nearChair(){ let best = null, bd = 0.8;
@@ -1500,6 +1539,7 @@ const rooms = [
 function zoneName(x, z){
   if (mode === 3) return 'Stairs (kitchen)';
   if (mode === 4) return 'Stairs (4e ↔ 3e)';
+  if (mode === 5) return x < 28 ? 'Paintball arena (2e)' : x > 35 ? 'East wing (2e)' : 'Lift lobby (2e)';
   if (mode === 2){ if (x < 28) return 'West wing (3e)';   // the part beyond the Entrance: only the shell for now
     if (x >= 35 && x <= 42 && z >= 8.18) return x < 38.0 ? 'Kitchen (3e)' : 'Belfort'; if (x >= 35 && x <= 42 && z <= 4.82) return x < 38.0 ? 'Vlasmarkt' : 'Dulle Griet';
     if (x > 42 && z < 4.82) return 'Gravensteen'; if (x > 42 && (z > 8.18 || x > 43.06)) return 'Service Desk'; if (x >= 35) return '3e verdiep'; if (z < 3.14) return 'Stairwell (3e)'; if (x > 33.86 && z < 5.32) return 'Stair hallway (3e)';
@@ -1538,8 +1578,8 @@ function frame(){
   else if (mode === 0 && px > ST1-0.37 && px < ST1 && pz > STZ0+R && pz < STZ1-R) mode = 3;
   else if (mode === 1 && px > MX2) mode = 3;
   else if (mode === 3){ if (px <= MX2) mode = 1; else if (px >= ST1) mode = 0; }
-  const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 4 ? stairY(px, pz) : 0;
-  const lvNow = (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
+  const fy = mode === 1 ? MZ : mode === 3 ? Math.max(0, Math.min(MZ, lineY(px))) : mode === 2 ? LO : mode === 5 ? LO2 : mode === 4 ? stairY(px, pz) : 0;
+  const lvNow = mode === 5 ? 5 : (mode === 2 || (mode === 4 && fy < -SH)) ? 2 : 0; if (lvNow !== mapLevel){ mapLevel = lvNow; buildMap(); }
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
   // GAME.eyeY: a minigame sets the eye height (race.js: seated)
   camera.position.set(px, GAME.eyeY != null ? GAME.eyeY : seat ? seat.base + seat.h + 0.72 : EYE - 0.8*crouchK + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
@@ -1571,6 +1611,8 @@ window.dispatchEvent(new Event('game-ready'));
 <script type="module" src="darts.js"></script>
 <script type="module" src="kiss.js"></script>
 <script type="module" src="mole.js"></script>
+<script type="module" src="lift.js"></script>
+<script type="module" src="paint.js"></script>
 <script type="module" src="boxing.js"></script>
 <script type="module" src="dance.js"></script>
 <script type="module" src="emotes.js"></script>

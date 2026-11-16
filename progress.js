@@ -155,6 +155,14 @@ export const ACHIEVEMENTS = [
     ['m_mole', '🕵️', 'Deep cover', 'Win as the Mole', 60],
     ['m_villain', '😈', 'Mwahaha', 'Strike a villain pose (V)', 5],
   ]),
+  ...A('Paintball', [
+    ['p_enter', '🛗', 'Going down', 'Take the lift to the paintball arena on the 2e', 5],
+    ['p_splat', '🎨', 'First blood (paint)', 'Splat a player from the other team', 10],
+    ['p_ten', '🖌️', 'Abstract artist', 'Splat 10 players in one game', 30],
+    ['p_flag', '🚩', 'Flag runner', 'Capture the enemy flag', 25],
+    ['p_hat', '🎩', 'Hat trick', 'Capture 3 flags in one game', 60],
+    ['p_win', '🏆', 'Paint it red (or blue)', 'Win a game of paintball', 30],
+  ]),
   ...A('Orbimons', [
     ['o_first', '🟣', 'Gotta catch one', 'Catch your first Orbimon', 15],
     ['o_5', '🟣', 'Collector', 'Catch 5 different Orbimons', 30],
