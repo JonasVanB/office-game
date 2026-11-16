@@ -95,6 +95,10 @@ async function firebaseNet(){
     saveProgress(id, d){ D.set(D.ref(db, 'progress/' + id), d).catch(e => console.warn('progress not saved:', e.message)); },
     onProgress(cb){ const p = D.ref(db, 'progress');
       D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('leaderboard not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
+    // parkour/<account id> = {t: best time in ms, n: name, s: checkpoint splits (ms), d: date}: the rooftop parkour leaderboard
+    setParkour(id, d){ D.set(D.ref(db, 'parkour/' + id), d).catch(e => console.warn('parkour time not saved:', e.message)); },
+    onParkour(cb){ const p = D.ref(db, 'parkour');
+      D.onChildAdded(p, s => cb(s.key, s.val()), e => console.warn('parkour leaderboard not loaded:', e.message)); D.onChildChanged(p, s => cb(s.key, s.val())); D.onChildRemoved(p, s => cb(s.key, null)); },
     // tiles/<panel>_<col>_<row> = {q, n, by, t}: quotes on the tile wall at desk 6
     setTile(k, d){ D.set(D.ref(db, 'tiles/' + k), d).catch(e => console.warn('tile not saved:', e.message)); },
     removeTile(k){ D.remove(D.ref(db, 'tiles/' + k)).catch(() => {}); },
@@ -111,7 +115,7 @@ async function firebaseNet(){
 }
 
 function localNet(){
-  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, postitCb = () => {}, mine = null; const boardCbs = {};
+  const bc = new BroadcastChannel('office-mp'), myKey = 'tab_' + rid(); let cb = () => {}, doorCb = () => {}, postitCb = () => {}, mine = null; const boardCbs = {}, pkCbs = [];
   const localBoards = () => { try { return JSON.parse(localStorage.getItem('office.localBoards')) || {}; } catch (e){ return {}; } };
   const saveBoards = all => { try { localStorage.setItem('office.localBoards', JSON.stringify(all)); } catch (e){} };
   const localPostits = () => { try { return JSON.parse(localStorage.getItem('office.localPostits')) || {}; } catch (e){ return {}; } };
@@ -146,6 +150,8 @@ function localNet(){
     async loadProgress(id){ try { return JSON.parse(localStorage.getItem('office.localProgress.' + id)); } catch (e){ return null; } },
     saveProgress(id, d){ try { localStorage.setItem('office.localProgress.' + id, JSON.stringify(d)); } catch (e){} },
     onProgress(f){ for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('office.localProgress.')) try { f(k.slice(21), JSON.parse(localStorage.getItem(k))); } catch (e){} } },
+    setParkour(id, d){ try { localStorage.setItem('office.localParkour.' + id, JSON.stringify(d)); } catch (e){} for (const f of pkCbs) f(id, d); },
+    onParkour(f){ pkCbs.push(f); for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith('office.localParkour.')) try { f(k.slice(20), JSON.parse(localStorage.getItem(k))); } catch (e){} } },
     // whiteboards: kept in this browser's localStorage, shared with the other tabs
     addStroke(b, d){ const all = localBoards(), id = 's' + Date.now().toString(36) + rid(); (all[b] = all[b] || {})[id] = d; saveBoards(all); bc.postMessage({type: 'stroke', key: myKey, b, id, d}); const f = boardCbs[b]; if (f) f.add(id, d); },
     clearBoard(b){ const all = localBoards(), ids = Object.keys(all[b] || {}); delete all[b]; saveBoards(all); bc.postMessage({type: 'clear', key: myKey, b, ids}); const f = boardCbs[b]; if (f) for (const id of ids) f.removed(id); },
@@ -407,7 +413,9 @@ async function main(){
   window.__onFrame = tick; window.__drawMapExtra = drawMapExtra;
   // for toilet.js (duels, other people's streams), sitting (who sits where) and boards.js (shared drawings)
   G.mp = {myKey: net.myKey, players: () => [...remotes.values()].map(r => ({key: r.key, name: r.name, x: r.x, y: r.ty, z: r.z, tx: r.tx, tz: r.tz, r: r.r, l: r.l || 0, si: r.si, pe: r.pe, bx: r.bx, dd: r.dd, em: r.em, rc: r.rc})),
-    setRing: up => net.setDoor('rng', up), now: () => net.now(), myName: () => (me() || {}).name || 'You'};
+    setRing: up => net.setDoor('rng', up), now: () => net.now(), myName: () => (me() || {}).name || 'You',
+    // parkour.js: your best time goes to the shared leaderboard under your account id
+    parkour: {id: () => (me() || {}).id || null, save(d){ const m = me(); if (m) net.setParkour(m.id, Object.assign({}, d, {n: m.name})); }, listen: cb => net.onParkour(cb)}};
   window.__seatTaken = c => { for (const r of remotes.values()) if (r.si && (r.l || 0) === (c.mode === 2 ? 2 : 0) && Math.hypot(r.tx - c.x, r.tz - c.z) < 0.3) return true; return false; };
   window.__boardNet = {add: (b, d) => net.addStroke(b, d), clear: b => net.clearBoard(b), listen: (b, add, removed) => net.onBoard(b, add, removed)};
   window.dispatchEvent(new Event('board-net'));

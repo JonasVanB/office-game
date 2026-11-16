@@ -141,6 +141,16 @@ export const ACHIEVEMENTS = [
     ['r_clean', '✨', 'Clean race', 'Finish a race without touching the railing', 30],
     ['r_laps', '🔁', 'Track regular', 'Drive 50 laps', 40, {stat: 'raceLaps', n: 50}],
   ]),
+  ...A('Parkour', [
+    ['p_out', '🏃', 'Free runner', 'Step out onto the rooftop parkour course (east emergency exit)', 10],
+    ['p_first', '🏁', 'Rooftop run', 'Finish the parkour course', 20],
+    ['p_fast', '⏱️', 'Quick feet', 'Finish the parkour course in under 30 seconds', 35],
+    ['p_flow', '⚡', 'Flow state', 'Finish the parkour course in under 20 seconds', 60],
+    ['p_clean', '✨', 'No safety net', 'Finish a run without falling or respawning', 30],
+    ['p_pb', '👻', 'Beat the ghost', 'Beat your own best time', 15],
+    ['p_top', '🥇', 'King of the roof', 'Hold the top spot on the parkour leaderboard', 60],
+    ['p_wall', '🧱', 'Wall runner', 'Do 50 wall runs', 30, {stat: 'wallRuns', n: 50}],
+  ]),
   ...A('Daily quests', [
     ['q_first', '📅', 'Quest giver', 'Complete a daily quest', 10],
     ['q_all', '🌟', 'Full day', "Complete all three of a day's quests", 30],

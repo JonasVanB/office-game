@@ -1537,6 +1537,7 @@ const rooms = [
   ['Duivelsteen (HR)', 35, 39.03, 0, 5.32], ['Boekentoren', 35, 39.03, 7.68, 13], ['Kitchen', 39.03, 43.2, 7.68, 13], ['Drinks storage', 49.1, 50, 7.03, 13]
 ];
 function zoneName(x, z){
+  if (GAME.zoneOverride) return GAME.zoneOverride;   // parkour.js: 'Rooftop parkour' while you are out on the course
   if (mode === 3) return 'Stairs (kitchen)';
   if (mode === 4) return 'Stairs (4e ↔ 3e)';
   if (mode === 5) return x < 28 ? 'Paintball arena (2e)' : x > 35 ? 'East wing (2e)' : 'Lift lobby (2e)';
@@ -1572,7 +1573,8 @@ function frame(){
   const dx = (fwd*fx + str*rx)*speed*dt, dz = (fwd*fz + str*rz)*speed*dt;
   if (dx && !blocked(px+dx, pz)) px += dx;
   if (dz && !blocked(px, pz+dz)) pz += dz;
-  if (mode === 0 && px > SXT-0.55 && px < SXT && pz > SZM+R && pz < 2.97-R) mode = 4;            // 4e → stairwell flight A
+  if (GAME.feetY != null) {}   // parkour.js moves you over the roofs: no stair or level changes meanwhile
+  else if (mode === 0 && px > SXT-0.55 && px < SXT && pz > SZM+R && pz < 2.97-R) mode = 4;            // 4e → stairwell flight A
   else if (mode === 2 && px > SXT-0.55 && px < SXT && pz > 0.17+R && pz < SZM-R) mode = 4;        // 3e → stairwell flight B
   else if (mode === 4){ if (px >= SXT) mode = pz > SZM ? 0 : 2; }
   else if (mode === 0 && px > ST1-0.37 && px < ST1 && pz > STZ0+R && pz < STZ1-R) mode = 3;
@@ -1583,7 +1585,7 @@ function frame(){
   if (hopY > 0 || hopV > 0){ hopV -= 9.8*dt; hopY += hopV*dt; if (hopY <= 0){ hopY = 0; hopV = 0; } }
   // GAME.eyeY: a minigame sets the eye height (race.js: seated)
   camera.position.set(px, GAME.eyeY != null ? GAME.eyeY : seat ? seat.base + seat.h + 0.72 : EYE - 0.8*crouchK + fy + hopY, pz); camera.rotation.set(pitch, yaw, 0);
-  const st = GAME.state; st.x = px; st.y = fy + hopY; st.hop = hopY; st.crouch = crouchK > 0.5; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone; st.si = seat ? seat.h : 0;
+  const st = GAME.state; st.x = px; st.y = GAME.feetY != null ? GAME.feetY : fy + hopY; st.hop = hopY; st.crouch = crouchK > 0.5; st.z = pz; st.yaw = yaw; st.lv = lvNow; st.started = started && !paused; st.zone = lastZone; st.si = seat ? seat.h : 0;   // GAME.feetY: parkour.js puts your feet on the roofs
   if (window.__onFrame){ try { window.__onFrame(dt); } catch (e){ console.error('mp.js frame:', e); } }   // a module error must never freeze the game
   if (window.__onFrameClock) window.__onFrameClock(dt);
   camera.updateMatrixWorld();
@@ -1617,5 +1619,6 @@ window.dispatchEvent(new Event('game-ready'));
 <script type="module" src="dance.js"></script>
 <script type="module" src="emotes.js"></script>
 <script type="module" src="race.js"></script>
+<script type="module" src="parkour.js"></script>
 </body>
 </html>
